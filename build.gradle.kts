@@ -2,6 +2,8 @@ plugins {
     java
     `java-library`
     `maven-publish`
+    id("io.freefair.lombok") version "6.5.1"
+    antlr
 }
 
 group = "hu.nemaberci"
@@ -17,6 +19,7 @@ dependencies {
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
     api("hu.nemaberci:regex-api:1.0-SNAPSHOT")
     implementation("com.thoughtworks.qdox:qdox:2.0.2")
+    antlr("org.antlr:antlr4:4.11.1")
 }
 
 tasks.getByName<Test>("test") {

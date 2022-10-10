@@ -2,7 +2,9 @@ package hu.nemaberci.generator;
 
 import com.thoughtworks.qdox.JavaProjectBuilder;
 import com.thoughtworks.qdox.model.JavaAnnotation;
+import com.thoughtworks.qdox.model.JavaClass;
 import com.thoughtworks.qdox.model.impl.DefaultJavaPackage;
+import hu.nemaberci.generator.parser.ManualRegexParser;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -10,6 +12,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 public class CodeGeneratorOrchestrator {
+
+    public static final String IMPORT_HU_NEMABERCI_REGEX_DATA_PARSE_RESULT = "import hu.nemaberci.regex.data.ParseResult;";
 
     private String getPackageName(String packageName) {
         return "package " + packageName + ";";
@@ -25,7 +29,7 @@ public class CodeGeneratorOrchestrator {
     }
 
     private String importedClasses() {
-        return "import hu.nemaberci.regex.data.ParseResult;";
+        return IMPORT_HU_NEMABERCI_REGEX_DATA_PARSE_RESULT;
     }
 
     private boolean isRegexParser(JavaAnnotation javaAnnotation) {
@@ -46,20 +50,7 @@ public class CodeGeneratorOrchestrator {
                     + targetLocationString.substring(targetLocationString.indexOf(".java"));
             boolean writeFile = false;
             StringBuilder stringBuilder = new StringBuilder();
-            stringBuilder.append(getPackageName(parser.getPackages().stream()
-                .findFirst().orElse(new DefaultJavaPackage("")).getName()));
-            stringBuilder.append("\n\n");
-            stringBuilder.append(importedClasses());
-            stringBuilder.append("\n\n");
-            stringBuilder.append("public class ");
-            stringBuilder.append(getClassName(parsedClass.getName()));
-            if (parsedClass.isInterface()) {
-                stringBuilder.append(" implements ");
-            } else {
-                stringBuilder.append(" extends ");
-            }
-            stringBuilder.append(parsedClass.getName());
-            stringBuilder.append(" {");
+            appendStartOfFile(parser, parsedClass, stringBuilder);
             for (var parsedFunction : parsedClass.getMethods()) {
                 if (parsedFunction.getAnnotations().stream().anyMatch(this::isRegexParser)) {
                     writeFile = true;
@@ -83,6 +74,32 @@ public class CodeGeneratorOrchestrator {
             e.printStackTrace();
         }
 
+    }
+
+    private void appendStartOfFile(
+        JavaProjectBuilder parser,
+        JavaClass parsedClass,
+        StringBuilder stringBuilder
+    ) {
+        stringBuilder.append(getPackageName(parser.getPackages().stream()
+            .findFirst().orElse(new DefaultJavaPackage("")).getName()));
+        stringBuilder.append("\n\n");
+        stringBuilder.append(importedClasses());
+        stringBuilder.append("\n\n");
+        stringBuilder.append("public class ");
+        stringBuilder.append(getClassName(parsedClass.getName()));
+        if (parsedClass.isInterface()) {
+            stringBuilder.append(" implements ");
+        } else {
+            stringBuilder.append(" extends ");
+        }
+        stringBuilder.append(parsedClass.getName());
+        stringBuilder.append(" {");
+    }
+
+    public static void main(String[] argv) {
+        var parser = new ManualRegexParser();
+        parser.parseRegex("((ab+)+[ab])(abc|b)?[abc]{3,5}(a){2,}b{3,}[^ab]*");
     }
 
 }
