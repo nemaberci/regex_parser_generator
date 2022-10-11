@@ -10,6 +10,9 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import org.apache.commons.lang3.builder.ToStringBuilder;
+import org.apache.commons.lang3.builder.ToStringStyle;
 
 public class CodeGeneratorOrchestrator {
 
@@ -99,7 +102,23 @@ public class CodeGeneratorOrchestrator {
 
     public static void main(String[] argv) {
         var parser = new ManualRegexParser();
-        parser.parseRegex("((ab+)+[ab])(abc|b)?[abc]{3,5}(a){2,}b{3,}[^ab]*");
+        System.out.println(
+            ToStringBuilder.reflectionToString(
+                List.of(
+                    (parser.parseRegex("(ab+)+")),
+                    (parser.parseRegex("(ab){1,}")),
+                    (parser.parseRegex("(ab){,2}")),
+                    (parser.parseRegex("(ab){1,2}")),
+                    (parser.parseRegex("((ab+)+[ab]?)")),
+                    (parser.parseRegex("[ab-d]{3,5}")),
+                    (parser.parseRegex("[^ab]*[-][]][]-]")),
+                    (parser.parseRegex("[^\\]]")),
+                    (parser.parseRegex("[^\\]-]")),
+                    (parser.parseRegex("[a-zA-Z0-9]{4,8}"))
+                ),
+                ToStringStyle.JSON_STYLE
+            )
+        );
     }
 
 }

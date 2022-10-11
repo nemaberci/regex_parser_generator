@@ -20,6 +20,7 @@ dependencies {
     api("hu.nemaberci:regex-api:1.0-SNAPSHOT")
     implementation("com.thoughtworks.qdox:qdox:2.0.2")
     antlr("org.antlr:antlr4:4.11.1")
+    implementation("org.apache.commons:commons-lang3:3.12.0")
 }
 
 tasks.getByName<Test>("test") {
