@@ -4,19 +4,19 @@ import com.thoughtworks.qdox.JavaProjectBuilder;
 import com.thoughtworks.qdox.model.JavaAnnotation;
 import com.thoughtworks.qdox.model.JavaClass;
 import com.thoughtworks.qdox.model.impl.DefaultJavaPackage;
-import hu.nemaberci.generator.parser.ManualRegexParser;
+import hu.nemaberci.generator.nfa.FiniteAutomata;
+import hu.nemaberci.generator.regex.ManualRegexParser;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
 import org.apache.commons.lang3.builder.ToStringBuilder;
 import org.apache.commons.lang3.builder.ToStringStyle;
 
 public class CodeGeneratorOrchestrator {
 
-    public static final String IMPORT_HU_NEMABERCI_REGEX_DATA_PARSE_RESULT = "import hu.nemaberci.regex.data.ParseResult;";
+    public static final String IMPORTS = "import hu.nemaberci.regex.data.ParseResult;\nimport javax.annotation.processing.Generated;";
 
     private String getPackageName(String packageName) {
         return "package " + packageName + ";";
@@ -26,13 +26,66 @@ public class CodeGeneratorOrchestrator {
         return originalClassName + "_impl";
     }
 
+    private String functionBody(String regexValue) {
+        StringBuilder stringBuilder = new StringBuilder();
+        stringBuilder.append("if (str.length() == 0) { return new ParseResult(false); }\n");
+        stringBuilder.append("int currIndex = 0;\n");
+        stringBuilder.append("int currState = 0;\n");
+        stringBuilder.append("while (currIndex < str.length()) { \n");
+        stringBuilder.append("char currChar = str.charAt(currIndex);\n");
+        stringBuilder.append("switch (currState) {\n");
+        var finiteAutomata = FiniteAutomata.fromRegexAlternation(
+            ManualRegexParser.parseRegex(regexValue));
+        for (var automataState : finiteAutomata.getStates()) {
+            stringBuilder.append("case ");
+            stringBuilder.append(automataState.getId());
+            stringBuilder.append(": {\n");
+            if (automataState.isTerminating()) {
+                stringBuilder.append("return new ParseResult(true);\n");
+            } else {
+                // beginning of curr char case
+                stringBuilder.append("switch (currChar) { \n");
+
+                automataState.getNextStates().forEach(
+                    (character, nextState) -> {
+                        stringBuilder.append("case ");
+                        stringBuilder.append("'").append(character).append("'");
+                        stringBuilder.append(": {\n");
+                        stringBuilder.append("currState = ");
+                        stringBuilder.append(nextState.getId());
+                        stringBuilder.append(";\n");
+                        stringBuilder.append("break;\n");
+                        stringBuilder.append("}\n");
+                    }
+                );
+
+                stringBuilder.append("default: {\n");
+                stringBuilder.append("currState = ");
+                stringBuilder.append(finiteAutomata.getDefaultState().getId());
+                stringBuilder.append(";\n");
+                stringBuilder.append("break;\n");
+                stringBuilder.append("}\n");
+                stringBuilder.append("}\n");
+                stringBuilder.append("break;");
+
+            }
+            stringBuilder.append("}\n");
+        }
+        stringBuilder.append("} \n");
+        stringBuilder.append("currIndex++;\n");
+        // todo: case when last character is part of the match
+        stringBuilder.append("} ");
+        stringBuilder.append("return new ParseResult(false);\n");
+        return stringBuilder.toString();
+    }
+
     private String functionImplementation(String functionName, String regexValue) {
         return "@Override\npublic ParseResult " + functionName
-            + " (String str) { return new ParseResult(str.equals(" + regexValue + ")); }";
+            + " (String str) { " + functionBody(regexValue) + " }";
     }
 
     private String importedClasses() {
-        return IMPORT_HU_NEMABERCI_REGEX_DATA_PARSE_RESULT;
+        return IMPORTS;
     }
 
     private boolean isRegexParser(JavaAnnotation javaAnnotation) {
@@ -89,6 +142,7 @@ public class CodeGeneratorOrchestrator {
         stringBuilder.append("\n\n");
         stringBuilder.append(importedClasses());
         stringBuilder.append("\n\n");
+        stringBuilder.append("@Generated(\"hu.nemaberci.generator.CodeGeneratorOrchestrator\")");
         stringBuilder.append("public class ");
         stringBuilder.append(getClassName(parsedClass.getName()));
         if (parsedClass.isInterface()) {
@@ -101,24 +155,25 @@ public class CodeGeneratorOrchestrator {
     }
 
     public static void main(String[] argv) {
-        var parser = new ManualRegexParser();
         System.out.println(
             ToStringBuilder.reflectionToString(
-                List.of(
-                    (parser.parseRegex("(ab+)+")),
-                    (parser.parseRegex("(ab){1,}")),
-                    (parser.parseRegex("(ab){,2}")),
-                    (parser.parseRegex("(ab){1,2}")),
-                    (parser.parseRegex("((ab+)+[ab]?)")),
-                    (parser.parseRegex("[ab-d]{3,5}")),
-                    (parser.parseRegex("[^ab]*[-][]][]-]")),
-                    (parser.parseRegex("[^\\]]")),
-                    (parser.parseRegex("[^\\]-]")),
-                    (parser.parseRegex("[a-zA-Z0-9]{4,8}"))
-                ),
+                //List.of(
+                //    (ManualRegexParser.parseRegex("(ab+)+")),
+                //    (ManualRegexParser.parseRegex("(ab){1,}")),
+                //    (ManualRegexParser.parseRegex("(ab){,2}")),
+                //    (ManualRegexParser.parseRegex("(ab){1,2}")),
+                //    (ManualRegexParser.parseRegex("((ab+)+[ab]?)")),
+                //    (ManualRegexParser.parseRegex("[ab-d]{3,5}")),
+                //    (ManualRegexParser.parseRegex("[^ab]*[-][]][]-]")),
+                //    (ManualRegexParser.parseRegex("[^\\]]")),
+                //    (ManualRegexParser.parseRegex("[^\\]-]")),
+                //    (ManualRegexParser.parseRegex("[a-zA-Z0-9]{4,8}"))
+                //),
+                ManualRegexParser.parseRegex("(ab[cd])+"),
                 ToStringStyle.JSON_STYLE
             )
         );
+
     }
 
 }

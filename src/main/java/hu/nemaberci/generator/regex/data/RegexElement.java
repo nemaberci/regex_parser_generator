@@ -1,17 +1,14 @@
-package hu.nemaberci.generator.data;
+package hu.nemaberci.generator.regex.data;
 
-import lombok.AllArgsConstructor;
 import lombok.Data;
-import lombok.NoArgsConstructor;
 import org.apache.commons.lang3.builder.ToStringBuilder;
 import org.apache.commons.lang3.builder.ToStringStyle;
 
 @Data
-@AllArgsConstructor
-@NoArgsConstructor
-public class RegexLiteral {
+public class RegexElement {
 
-    private char character;
+    private RegexAtom atom;
+    private RegexQuantifier quantifier = new RegexQuantifier();
 
     @Override
     public String toString() {

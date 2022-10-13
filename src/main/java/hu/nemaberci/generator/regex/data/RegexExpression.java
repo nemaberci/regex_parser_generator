@@ -1,14 +1,15 @@
-package hu.nemaberci.generator.data;
+package hu.nemaberci.generator.regex.data;
 
+import java.util.ArrayList;
+import java.util.List;
 import lombok.Data;
 import org.apache.commons.lang3.builder.ToStringBuilder;
 import org.apache.commons.lang3.builder.ToStringStyle;
 
 @Data
-public class RegexQuantifier {
+public class RegexExpression {
 
-    private int min;
-    private int max;
+    List<RegexElement> elements = new ArrayList<>();
 
     @Override
     public String toString() {

@@ -1,4 +1,4 @@
-package hu.nemaberci.generator.parser;
+package hu.nemaberci.generator.regex;
 
 import static hu.nemaberci.generator.parser.PCREParser.RULE_alternation;
 import static hu.nemaberci.generator.parser.PCREParser.RULE_atom;
@@ -11,13 +11,15 @@ import static hu.nemaberci.generator.parser.PCREParser.RULE_literal;
 import static hu.nemaberci.generator.parser.PCREParser.RULE_negated_character_class;
 import static hu.nemaberci.generator.parser.PCREParser.RULE_quantifier;
 
-import hu.nemaberci.generator.data.RegexAlternation;
-import hu.nemaberci.generator.data.RegexAtom;
-import hu.nemaberci.generator.data.RegexCharacterclass;
-import hu.nemaberci.generator.data.RegexElement;
-import hu.nemaberci.generator.data.RegexExpression;
-import hu.nemaberci.generator.data.RegexLiteral;
-import hu.nemaberci.generator.data.RegexQuantifier;
+import hu.nemaberci.generator.regex.data.RegexAlternation;
+import hu.nemaberci.generator.regex.data.RegexAtom;
+import hu.nemaberci.generator.regex.data.RegexCharacterclass;
+import hu.nemaberci.generator.regex.data.RegexElement;
+import hu.nemaberci.generator.regex.data.RegexExpression;
+import hu.nemaberci.generator.regex.data.RegexLiteral;
+import hu.nemaberci.generator.regex.data.RegexQuantifier;
+import hu.nemaberci.generator.parser.PCRELexer;
+import hu.nemaberci.generator.parser.PCREParser;
 import hu.nemaberci.generator.parser.PCREParser.ParseContext;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
@@ -27,7 +29,7 @@ import org.antlr.v4.runtime.tree.TerminalNode;
 
 public class ManualRegexParser {
 
-    private void fillAlternation(RegexAlternation alternation, ParseTree parseTree,
+    private static void fillAlternation(RegexAlternation alternation, ParseTree parseTree,
         PCREParser parser
     ) {
         if (parseTree instanceof ParserRuleContext
@@ -46,7 +48,7 @@ public class ManualRegexParser {
         }
     }
 
-    private void fillExpression(RegexExpression expression, ParseTree parseTree, PCREParser parser
+    private static void fillExpression(RegexExpression expression, ParseTree parseTree, PCREParser parser
     ) {
         if (parseTree instanceof ParserRuleContext
             && ((ParserRuleContext) parseTree).getRuleIndex() == RULE_element) {
@@ -64,7 +66,7 @@ public class ManualRegexParser {
         }
     }
 
-    private void fillElement(RegexElement element, ParseTree parseTree, PCREParser parser) {
+    private static void fillElement(RegexElement element, ParseTree parseTree, PCREParser parser) {
         if (parseTree instanceof ParserRuleContext
             && ((ParserRuleContext) parseTree).getRuleIndex() == RULE_atom) {
             var atom = new RegexAtom();
@@ -88,7 +90,7 @@ public class ManualRegexParser {
         }
     }
 
-    private void fillAtom(RegexAtom atom, ParseTree parseTree, PCREParser parser) {
+    private static void fillAtom(RegexAtom atom, ParseTree parseTree, PCREParser parser) {
         if (parseTree instanceof ParserRuleContext) {
             final var ruleIndex = ((ParserRuleContext) parseTree).getRuleIndex();
             switch (ruleIndex) {
@@ -127,7 +129,7 @@ public class ManualRegexParser {
         }
     }
 
-    private void setLiteral(RegexAtom atom, ParseTree parseTree) {
+    private static void setLiteral(RegexAtom atom, ParseTree parseTree) {
         var literal = new RegexLiteral();
         for (
             int i = 0; i < parseTree.getChildCount(); i++) {
@@ -136,7 +138,7 @@ public class ManualRegexParser {
         atom.setLiteral(literal);
     }
 
-    private void setCharacterClass(boolean negated, ParseTree parseTree, RegexAtom atom) {
+    private static void setCharacterClass(boolean negated, ParseTree parseTree, RegexAtom atom) {
         var characterClass = new RegexCharacterclass();
         characterClass.setNegated(negated);
         for (
@@ -146,7 +148,7 @@ public class ManualRegexParser {
         atom.setCharacterClass(characterClass);
     }
 
-    private void setAlteration(RegexAtom atom, ParseTree parseTree, PCREParser parser) {
+    private static void setAlteration(RegexAtom atom, ParseTree parseTree, PCREParser parser) {
         var alternation = new RegexAlternation();
         for (
             int i = 0; i < parseTree.getChildCount(); i++) {
@@ -155,7 +157,7 @@ public class ManualRegexParser {
         atom.setAlternation(alternation);
     }
 
-    private void fillCharacterClass(RegexCharacterclass characterClass, ParseTree parseTree) {
+    private static void fillCharacterClass(RegexCharacterclass characterClass, ParseTree parseTree) {
         if (parseTree instanceof ParserRuleContext
             && ((ParserRuleContext) parseTree).getRuleIndex() == RULE_cc_atom) {
             createCharacterClassContent(characterClass, parseTree);
@@ -190,11 +192,11 @@ public class ManualRegexParser {
         }
     }
 
-    private void fillLiteral(RegexLiteral literal, ParseTree parseTree) {
+    private static void fillLiteral(RegexLiteral literal, ParseTree parseTree) {
         literal.setCharacter(parseTree.getText().charAt(0));
     }
 
-    private void fillQuantifier(RegexQuantifier quantifier, ParseTree parseTree) {
+    private static void fillQuantifier(RegexQuantifier quantifier, ParseTree parseTree) {
         switch (parseTree.getText().charAt(0)) {
             case '?': {
                 quantifier.setMin(0);
@@ -235,7 +237,7 @@ public class ManualRegexParser {
         }
     }
 
-    private RegexAlternation parse(ParseContext parseContext, PCREParser parser) {
+    private static RegexAlternation parse(ParseContext parseContext, PCREParser parser) {
         var alternation = new RegexAlternation();
         fillAlternation(alternation, parseContext, parser);
         return alternation;
@@ -244,7 +246,7 @@ public class ManualRegexParser {
     /**
      * Returns first regex part of the regex expression
      */
-    public RegexAlternation parseRegex(String regexStr) {
+    public static RegexAlternation parseRegex(String regexStr) {
 
         PCRELexer pcreLexer = new PCRELexer(CharStreams.fromString(regexStr));
         PCREParser parser = new PCREParser(new CommonTokenStream(pcreLexer));

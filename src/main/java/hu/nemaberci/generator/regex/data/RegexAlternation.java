@@ -1,4 +1,4 @@
-package hu.nemaberci.generator.data;
+package hu.nemaberci.generator.regex.data;
 
 import java.util.ArrayList;
 import java.util.List;

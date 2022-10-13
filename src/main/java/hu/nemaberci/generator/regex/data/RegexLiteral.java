@@ -1,15 +1,17 @@
-package hu.nemaberci.generator.data;
+package hu.nemaberci.generator.regex.data;
 
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import org.apache.commons.lang3.builder.ToStringBuilder;
 import org.apache.commons.lang3.builder.ToStringStyle;
 
 @Data
-public class RegexAtom {
+@AllArgsConstructor
+@NoArgsConstructor
+public class RegexLiteral {
 
-    private RegexAlternation alternation;
-    private RegexLiteral literal;
-    private RegexCharacterclass characterClass;
+    private char character;
 
     @Override
     public String toString() {
