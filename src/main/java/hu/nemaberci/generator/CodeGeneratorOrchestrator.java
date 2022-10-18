@@ -4,16 +4,18 @@ import com.thoughtworks.qdox.JavaProjectBuilder;
 import com.thoughtworks.qdox.model.JavaAnnotation;
 import com.thoughtworks.qdox.model.JavaClass;
 import com.thoughtworks.qdox.model.impl.DefaultJavaPackage;
-import hu.nemaberci.generator.nfa.FiniteAutomata;
-import hu.nemaberci.generator.regex.ManualRegexParser;
+import hu.nemaberci.generator.regex.dfa.data.DFANode;
+import hu.nemaberci.generator.regex.dfa.minimizer.DFAMinimizer;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import org.apache.commons.lang3.builder.ToStringBuilder;
-import org.apache.commons.lang3.builder.ToStringStyle;
+import java.util.ArrayList;
+import java.util.List;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 public class CodeGeneratorOrchestrator {
 
     public static final String IMPORTS = "import hu.nemaberci.regex.data.ParseResult;\nimport javax.annotation.processing.Generated;";
@@ -26,62 +28,104 @@ public class CodeGeneratorOrchestrator {
         return originalClassName + "_impl";
     }
 
-    private String functionBody(String regexValue) {
-        StringBuilder stringBuilder = new StringBuilder();
-        stringBuilder.append("if (str.length() == 0) { return new ParseResult(false); }\n");
-        stringBuilder.append("int currIndex = 0;\n");
-        stringBuilder.append("int currState = 0;\n");
-        stringBuilder.append("while (currIndex < str.length()) { \n");
-        stringBuilder.append("char currChar = str.charAt(currIndex);\n");
-        stringBuilder.append("switch (currState) {\n");
-        var finiteAutomata = FiniteAutomata.fromRegexAlternation(
-            ManualRegexParser.parseRegex(regexValue));
-        for (var automataState : finiteAutomata.getStates()) {
-            stringBuilder.append("case ");
-            stringBuilder.append(automataState.getId());
-            stringBuilder.append(": {\n");
-            if (automataState.isTerminating()) {
-                stringBuilder.append("return new ParseResult(true);\n");
-            } else {
-                // beginning of curr char case
-                stringBuilder.append("switch (currChar) { \n");
+    private void appendDFANode(StringBuilder stringBuilder, DFANode node, DFANode startingNode,
+        List<Integer> done
+    ) {
 
-                automataState.getNextStates().forEach(
-                    (character, nextState) -> {
-                        stringBuilder.append("case ");
-                        stringBuilder.append("'").append(character).append("'");
-                        stringBuilder.append(": {\n");
-                        stringBuilder.append("currState = ");
-                        stringBuilder.append(nextState.getId());
-                        stringBuilder.append(";\n");
-                        stringBuilder.append("break;\n");
-                        stringBuilder.append("}\n");
-                    }
-                );
-
-                stringBuilder.append("default: {\n");
-                stringBuilder.append("currState = ");
-                stringBuilder.append(finiteAutomata.getDefaultState().getId());
-                stringBuilder.append(";\n");
-                stringBuilder.append("break;\n");
-                stringBuilder.append("}\n");
-                stringBuilder.append("}\n");
-                stringBuilder.append("break;");
-
-            }
-            stringBuilder.append("}\n");
+        if (done.contains(node.getId())) {
+            return;
         }
-        stringBuilder.append("} \n");
+
+        stringBuilder.append("\t".repeat(4));
+        stringBuilder.append("case ");
+        stringBuilder.append(node.getId());
+        stringBuilder.append(": {\n");
+        if (node.isAccepting()) {
+            stringBuilder.append("\t".repeat(5));
+            stringBuilder.append("return new ParseResult(true);\n");
+        } else {
+            // beginning of curr char case
+            stringBuilder.append("\t".repeat(5));
+            stringBuilder.append("switch (currChar) { \n");
+
+            node.getTransitions().forEach(
+                (character, dfaNode) -> {
+                    stringBuilder.append("\t".repeat(6));
+                    stringBuilder.append("case ");
+                    stringBuilder.append("'").append(character).append("'");
+                    stringBuilder.append(": {\n");
+                    stringBuilder.append("\t".repeat(7));
+                    stringBuilder.append("currState = ");
+                    stringBuilder.append(dfaNode.getId());
+                    stringBuilder.append(";\n");
+                    stringBuilder.append("\t".repeat(7));
+                    stringBuilder.append("break;\n");
+                    stringBuilder.append("\t".repeat(6));
+                    stringBuilder.append("}\n");
+                }
+            );
+
+            stringBuilder.append("\t".repeat(6));
+            stringBuilder.append("default: {\n");
+            stringBuilder.append("\t".repeat(7));
+            stringBuilder.append("currState = ");
+            stringBuilder.append(startingNode.getId());
+            stringBuilder.append(";\n");
+            stringBuilder.append("\t".repeat(7));
+            stringBuilder.append("break;\n");
+            stringBuilder.append("\t".repeat(6));
+            stringBuilder.append("}\n");
+            stringBuilder.append("\t".repeat(5));
+            stringBuilder.append("}\n");
+            stringBuilder.append("\t".repeat(5));
+            stringBuilder.append("break;");
+
+        }
+        stringBuilder.append("\t".repeat(4));
+        stringBuilder.append("}\n");
+        done.add(node.getId());
+        node.getTransitions().forEach(
+            (character, dfaNode) -> appendDFANode(stringBuilder, dfaNode, startingNode, done)
+        );
+    }
+
+    private String functionBody(String regexValue) {
+        var finiteAutomata = new DFAMinimizer().parseAndConvertAndMinimize(regexValue.substring(1, regexValue.length() - 1));
+        StringBuilder stringBuilder = new StringBuilder();
+        stringBuilder.append("\t".repeat(2));
+        stringBuilder.append("if (str.length() == 0) {\n");
+        stringBuilder.append("\t".repeat(3));
+        stringBuilder.append("return new ParseResult(false);\n");
+        stringBuilder.append("\t".repeat(2));
+        stringBuilder.append("}\n");
+        stringBuilder.append("\t".repeat(2));
+        stringBuilder.append("int currIndex = 0;\n");
+        stringBuilder.append("\t".repeat(2));
+        stringBuilder.append("int currState = ");
+        stringBuilder.append(finiteAutomata.getId());
+        stringBuilder.append(";\n");
+        stringBuilder.append("\t".repeat(2));
+        stringBuilder.append("while (currIndex < str.length()) { \n");
+        stringBuilder.append("\t".repeat(3));
+        stringBuilder.append("char currChar = str.charAt(currIndex);\n");
+        stringBuilder.append("\t".repeat(3));
+        stringBuilder.append("switch (currState) {\n");
+        appendDFANode(stringBuilder, finiteAutomata, finiteAutomata, new ArrayList<>());
+        stringBuilder.append("\t".repeat(3));
+        stringBuilder.append("}\n");
+        stringBuilder.append("\t".repeat(3));
         stringBuilder.append("currIndex++;\n");
         // todo: case when last character is part of the match
-        stringBuilder.append("} ");
+        stringBuilder.append("\t".repeat(2));
+        stringBuilder.append("}\n");
+        stringBuilder.append("\t".repeat(2));
         stringBuilder.append("return new ParseResult(false);\n");
         return stringBuilder.toString();
     }
 
     private String functionImplementation(String functionName, String regexValue) {
-        return "@Override\npublic ParseResult " + functionName
-            + " (String str) { " + functionBody(regexValue) + " }";
+        return "\t@Override\n\tpublic ParseResult " + functionName
+            + " (String str) {\n" + functionBody(regexValue) + "\t}";
     }
 
     private String importedClasses() {
@@ -142,7 +186,7 @@ public class CodeGeneratorOrchestrator {
         stringBuilder.append("\n\n");
         stringBuilder.append(importedClasses());
         stringBuilder.append("\n\n");
-        stringBuilder.append("@Generated(\"hu.nemaberci.generator.CodeGeneratorOrchestrator\")");
+        stringBuilder.append("@Generated(\"hu.nemaberci.generator.CodeGeneratorOrchestrator\")\n");
         stringBuilder.append("public class ");
         stringBuilder.append(getClassName(parsedClass.getName()));
         if (parsedClass.isInterface()) {
@@ -154,26 +198,24 @@ public class CodeGeneratorOrchestrator {
         stringBuilder.append(" {");
     }
 
-    public static void main(String[] argv) {
-        System.out.println(
-            ToStringBuilder.reflectionToString(
-                //List.of(
-                //    (ManualRegexParser.parseRegex("(ab+)+")),
-                //    (ManualRegexParser.parseRegex("(ab){1,}")),
-                //    (ManualRegexParser.parseRegex("(ab){,2}")),
-                //    (ManualRegexParser.parseRegex("(ab){1,2}")),
-                //    (ManualRegexParser.parseRegex("((ab+)+[ab]?)")),
-                //    (ManualRegexParser.parseRegex("[ab-d]{3,5}")),
-                //    (ManualRegexParser.parseRegex("[^ab]*[-][]][]-]")),
-                //    (ManualRegexParser.parseRegex("[^\\]]")),
-                //    (ManualRegexParser.parseRegex("[^\\]-]")),
-                //    (ManualRegexParser.parseRegex("[a-zA-Z0-9]{4,8}"))
-                //),
-                ManualRegexParser.parseRegex("(ab[cd])+"),
-                ToStringStyle.JSON_STYLE
-            )
+    private static void print(List<DFANode> printed, DFANode dfaNode) {
+        if (printed.contains(dfaNode)) {
+            return;
+        }
+        printed.add(dfaNode);
+        System.out.println("id:" + dfaNode.getId());
+        System.out.println("edges:" + dfaNode.getTransitions().size());
+        dfaNode.getTransitions().forEach((c, other) -> {
+            System.out.println(dfaNode.getId() + " + " + c + " --> " + other.getId() + ", it is" + (other.isAccepting() ? "" : " not") + " terminating");
+            print(printed, other);
+        }
         );
+    }
 
+    public static void main(String[] args) {
+        var dfa = new DFAMinimizer().parseAndConvertAndMinimize("[abcd]?(a|b|d)+ab");
+        System.out.println(dfa);
+        // print(new ArrayList<>(), dfa);
     }
 
 }

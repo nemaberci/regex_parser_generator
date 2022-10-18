@@ -9,16 +9,10 @@ import java.util.List;
 
 public class RegexToNFAParser {
 
-    public static final char EPSILON = 'ϵ';
-
-    private static final RegexToNFAParser INSTANCE = new RegexToNFAParser();
-
-    public static RegexToNFAParser getInstance() {
-        return INSTANCE;
-    }
+    public static final char EPSILON = 0x03B5;
 
     public NFANode parseAndConvert(String regex) {
-        return convert(RegexParser.getInstance().parseRegex(regex));
+        return convert(new RegexParser().parseRegex(regex));
     }
 
     // todo list:

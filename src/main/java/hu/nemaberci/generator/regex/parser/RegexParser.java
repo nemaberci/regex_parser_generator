@@ -10,19 +10,15 @@ import org.apache.commons.lang3.ArrayUtils;
 @Slf4j
 public class RegexParser {
 
-    private RegexParser() {
-    }
-
-    private static final RegexParser INSTANCE = new RegexParser();
-
-    public static RegexParser getInstance() {
-        return INSTANCE;
-    }
-
     public RegexNode parseRegex(String regex) {
         return parseRegex(regex, 0, regex.length(), true);
     }
 
+    // todo list
+    // 1. Fully support escaping characters
+    // 2. Support named capture groups
+    // 3. Support regex flags
+    // 4. Support start and end of line characters ($ and ^)
     private RegexNode parseRegex(String expression, int expressionStart, int expressionEnd,
         boolean newExpression
     ) {
@@ -145,10 +141,14 @@ public class RegexParser {
                     "Curly brackets contains more than 3 parts '" + expression
                         + "'");
             }
-            if (!curlyBracketParts[0].trim().equals("")) {
+            if (curlyBracketParts[0] != null && !curlyBracketParts[0].trim().equals("")) {
                 min = Integer.parseUnsignedInt(curlyBracketParts[0].trim());
             }
-            if (!curlyBracketParts[1].trim().equals("")) {
+            if (
+                curlyBracketParts.length > 1 &&
+                curlyBracketParts[1] != null &&
+                !curlyBracketParts[1].trim().equals("")
+            ) {
                 max = Integer.parseUnsignedInt(curlyBracketParts[1].trim());
             }
         } else {
