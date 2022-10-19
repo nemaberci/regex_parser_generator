@@ -2,7 +2,13 @@ package hu.nemaberci.generator.regex.dfa.minimizer;
 
 import hu.nemaberci.generator.regex.dfa.NFAToDFAConverter;
 import hu.nemaberci.generator.regex.dfa.data.DFANode;
-import hu.nemaberci.generator.regex.dfa.data.DFANodeEdge;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 public class DFAMinimizer {
 
@@ -198,9 +204,239 @@ public class DFAMinimizer {
         return new NFAToDFAConverter().parseAndConvert(regex);
     }
 
+    private void walkTreeAndAllNeighbours(List<DFANode> nodes, DFANode curr) {
+        curr.getTransitions().forEach(
+            (character, otherNode) -> {
+                if (!nodes.contains(otherNode)) {
+                    nodes.add(otherNode);
+                    walkTreeAndAllNeighbours(nodes, otherNode);
+                }
+            }
+        );
+    }
+
+    private DFANode find(List<DFANode> nodes, int id) {
+        return nodes.stream()
+            .filter(node -> node.getId() == id)
+            .findFirst()
+            .get();
+    }
+
+    private List<DFANode> createInverseDFA(List<DFANode> nodes) {
+        List<DFANode> inverse = new ArrayList<>();
+        nodes.forEach(
+            node ->
+                inverse.add(
+                    new DFANode().setId(node.getId()).setAccepting(node.isAccepting())
+                )
+        );
+        nodes.forEach(
+            node ->
+                node.getTransitions().forEach(
+                    (c, other) ->
+                        find(inverse, other.getId()).getTransitions().put(c, node)
+                )
+        );
+        return inverse;
+    }
+
+    private void constructA(Map<Character, List<List<DFANode>>> a, List<Character> alphabet, List<List<DFANode>> B, int j) {
+        for (var c : alphabet) {
+            if (a.get(c).size() > j) {
+                a.get(c).get(j).clear();
+            } else {
+                a.get(c).add(new ArrayList<>());
+            }
+            for (var node : B.get(j)) {
+                if (node.getTransitions().containsKey(c)) {
+                    a.get(c).get(j).add(node);
+                }
+            }
+            a.get(c).add(new ArrayList<>());
+            for (var node : B.get(a.get(c).size() - 1)) {
+                if (node.getTransitions().containsKey(c)) {
+                    a.get(c).get(a.get(c).size() - 1).add(node);
+                }
+            }
+        }
+    }
+
+    private List<List<DFANode>> hopcroft(List<DFANode> states) {
+        // Step 1.
+        final List<DFANode> inverse = createInverseDFA(states);
+        final List<Character> alphabet = extractAlphabet(states);
+
+        final List<DFANode> acceptingNodes = states.stream()
+            .filter(DFANode::isAccepting)
+            .collect(Collectors.toList());
+        final List<DFANode> nonAcceptingNodes = states.stream()
+            .filter(Predicate.not(DFANode::isAccepting))
+            .collect(Collectors.toList());
+
+        final List<DFANode> inverseAcceptingNodes = inverse.stream().filter(DFANode::isAccepting)
+            .collect(Collectors.toList());
+        final List<DFANode> inverseNonAcceptingNodes = inverse.stream()
+            .filter(Predicate.not(DFANode::isAccepting))
+            .collect(Collectors.toList());
+
+        /*
+         * Hopcroft used indexing starting at 1, however, in Java, list indexes begin at 0, so
+         * some portions of the implementation have been changed to reflect this implementation
+         * detail.
+         * */
+
+        // Step 2.
+        // Named originally "a" in Hopcroft's paper.
+        Map<Character, List<List<DFANode>>> a = new HashMap<>();
+        // Named originally "B" in Hopcroft's paper.
+        List<List<DFANode>> B = new ArrayList<>();
+        B.add(acceptingNodes);
+        B.add(nonAcceptingNodes);
+        List<List<DFANode>> inverseB = new ArrayList<>();
+        inverseB.add(inverseAcceptingNodes);
+        inverseB.add(inverseNonAcceptingNodes);
+        for (var c : alphabet) {
+            a.put(c, new ArrayList<>());
+        }
+        for (var c : alphabet) {
+            a.get(c).add(new ArrayList<>());
+            for (var node : inverseB.get(0)) {
+                if (node.getTransitions().containsKey(c)) {
+                    a.get(c).get(0).add(find(B.get(0), node.getId()));
+                }
+            }
+            a.get(c).add(new ArrayList<>());
+            for (var node : inverseB.get(1)) {
+                if (node.getTransitions().containsKey(c)) {
+                    a.get(c).get(1).add(find(B.get(1), node.getId()));
+                }
+            }
+        }
+        // Step 3.
+        int k = 2;
+        // Step 4.
+        Map<Character, List<Integer>> L = new HashMap<>();
+        for (var c : alphabet) {
+            L.put(
+                c,
+                a.get(c).get(0).size() > a.get(c).get(1).size() ? new ArrayList<>(List.of(1))
+                    : new ArrayList<>(List.of(0))
+            );
+        }
+        // Step 5.
+        // Originally "a" in Hopcroft's paper, however, he uses "a" multiple times to
+        // refer to multiple variables.
+        int characterIndex = 0;
+        char c;
+        boolean complete = false;
+        while (!complete) {
+            c = alphabet.get(characterIndex++);
+            while (!L.get(c).isEmpty()) {
+                // Step 6.
+                var i = L.get(c).get(0);
+                L.get(c).remove(0);
+
+                // Step 7.
+                for (int j = 0; j < k; j++) {
+
+                    char finalC = c;
+                    final List<DFANode> ai = a.get(finalC).get(i);
+                    final var bj = B.get(j);
+                    final var transitionsWithCharacter = bj.stream().map(
+                        t -> t.getTransitions().keySet().stream()
+                            .filter(character -> finalC == character)
+                            .map(character -> t.getTransitions().get(character))
+                            .collect(Collectors.toList())
+                    ).flatMap(Collection::stream).collect(Collectors.toList());
+                    // Step 7.a.
+                    // Originally B'(j) in Hopcroft's paper
+                    List<DFANode> split = bj.stream().filter(
+                        t -> t.getTransitions().keySet().stream()
+                            .anyMatch(
+                                character ->
+                                    character == finalC &&
+                                        ai.contains(
+                                            t.getTransitions().get(character)
+                                        )
+                            )
+                    ).collect(Collectors.toList());
+                    if (!split.isEmpty()) {
+                        // Originally B"(j) in Hopcroft's paper
+                        List<DFANode> remainder = B.get(j).stream()
+                            .filter(Predicate.not(split::contains))
+                            .collect(Collectors.toList());
+
+                        // Step 7.b.
+                        B.set(j, remainder);
+                        B.add(remainder);
+                        constructA(a, alphabet, B, k);
+
+                        // Step 7.c.
+                        int finalJ = j;
+                        int finalK = k;
+                        L.forEach(
+                            (character, integers) -> {
+                                final List<DFANode> aj = a.get(character).get(finalJ);
+                                final List<DFANode> ak = a.get(character).get(finalK);
+                                if (
+                                    integers.contains(finalJ) ||
+                                        (
+                                            !aj.isEmpty() &&
+                                                aj.size() <= ak.size()
+                                        )
+                                ) {
+                                    integers.add(finalK);
+                                } else {
+                                    integers.add(finalJ);
+                                }
+                            }
+                        );
+
+                        // Step 7.d.
+                        k++;
+
+                        // Probably needed
+                        characterIndex = 0;
+                    }
+
+                }
+
+            }
+
+            // Step 5. cont. / Step 8.
+            complete = alphabet.stream().allMatch(
+                character -> L.get(character).isEmpty()
+            );
+        }
+
+        return B;
+
+    }
+
     // todo
     public DFANode minimize(DFANode startNode) {
+        final List<DFANode> allNodes = extractAllNodes(startNode);
+        var done = hopcroft(allNodes);
         return startNode;
+    }
+
+    private List<DFANode> extractAllNodes(DFANode startNode) {
+        List<DFANode> allNodes = new ArrayList<>();
+        allNodes.add(startNode);
+        walkTreeAndAllNeighbours(allNodes, startNode);
+        return allNodes;
+    }
+
+    private static List<Character> extractAlphabet(List<DFANode> allNodes) {
+        List<Character> alphabet = new ArrayList<>();
+        for (var node : allNodes) {
+            for (var c : node.getTransitions().keySet()) {
+                if (!alphabet.contains(c)) {
+                    alphabet.add(c);
+                }
+            }
+        }
+        return alphabet;
     }
 
 }
