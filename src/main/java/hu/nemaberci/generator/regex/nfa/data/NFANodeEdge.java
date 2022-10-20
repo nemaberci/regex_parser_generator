@@ -15,6 +15,7 @@ public class NFANodeEdge {
 
     private char character;
     private NFANode end;
+    private boolean wildcard = false;
 
     //@Override
     //public String toString() {

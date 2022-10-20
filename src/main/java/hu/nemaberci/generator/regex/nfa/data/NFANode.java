@@ -24,7 +24,8 @@ public class NFANode {
     public enum NFANodeType {
         START,
         ACCEPT,
-        EMPTY
+        EMPTY,
+        NEGATED
     }
 
     //@Override

@@ -7,39 +7,37 @@ import hu.nemaberci.generator.regex.nfa.data.NFANodeEdge;
 import hu.nemaberci.generator.regex.parser.RegexParser;
 import java.util.Arrays;
 import java.util.List;
-import org.apache.commons.lang3.CharSequenceUtils;
-import org.apache.commons.lang3.CharUtils;
-import org.apache.commons.lang3.StringUtils;
 
 public class RegexToNFAParser {
 
     public static final char EPSILON = 0x03B5;
 
     public NFANode parseAndConvert(String regex) {
-        return convert(new RegexParser().parseRegex(regex));
+        return convert(new RegexParser().parseRegex(regex).getFirstNode());
     }
 
     // todo list:
     // 1. Negated character ranges
     // 2. Lazy or eager switches
-    private int generateNFAGraph(RegexNode regexNode, NFANode startNode, NFANode endNode, int count) {
+    private int generateNFAGraph(RegexNode regexNode, NFANode startNode, NFANode endNode, int count
+    ) {
         if (startNode.getId() == -1) {
             startNode.setId(count++);
         }
         switch (regexNode.getType()) {
-            case EMPTY:{
+            case EMPTY: {
                 startNode.getEdges().add(
                     new NFANodeEdge().setEnd(endNode).setCharacter(EPSILON)
                 );
                 break;
             }
-            case CHARACTER:{
+            case CHARACTER: {
                 startNode.getEdges().add(
                     new NFANodeEdge().setEnd(endNode).setCharacter(regexNode.getCharacters()[0])
                 );
                 break;
             }
-            case STAR:{
+            case STAR: {
                 var tempStart = new NFANode();
                 var tempEnd = new NFANode();
                 tempEnd.getEdges().addAll(
@@ -103,7 +101,7 @@ public class RegexToNFAParser {
                 }
                 break;
             }
-            case CHARACTER_RANGE:{
+            case CHARACTER_RANGE: {
                 for (char c : regexNode.getCharacters()) {
                     startNode.getEdges().add(
                         new NFANodeEdge().setEnd(endNode).setCharacter(c)
@@ -111,14 +109,21 @@ public class RegexToNFAParser {
                 }
                 break;
             }
-            case NEGATED_CHARACTER_RANGE:{
-                for (int c = 32; c < 128; c++) {
-                    if (Arrays.binarySearch(regexNode.getCharacters(), (char) c) < 0) {
-                        startNode.getEdges().add(
-                            new NFANodeEdge().setEnd(endNode).setCharacter((char) c)
-                        );
-                    }
+            case NEGATED_CHARACTER_RANGE: {
+                startNode.setType(NFANodeType.NEGATED);
+                for (char c : regexNode.getCharacters()) {
+                    startNode.getEdges().add(
+                        new NFANodeEdge().setEnd(endNode).setCharacter(c)
+                    );
                 }
+                break;
+            }
+            case ANY: {
+                startNode.getEdges().add(
+                    new NFANodeEdge()
+                        .setWildcard(true)
+                        .setEnd(endNode)
+                );
                 break;
             }
         }

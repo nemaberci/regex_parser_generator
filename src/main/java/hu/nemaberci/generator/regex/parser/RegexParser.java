@@ -1,7 +1,9 @@
 package hu.nemaberci.generator.regex.parser;
 
+import hu.nemaberci.generator.regex.data.RegexFlag;
 import hu.nemaberci.generator.regex.data.RegexNode;
 import hu.nemaberci.generator.regex.data.RegexNode.RegexNodeType;
+import hu.nemaberci.generator.regex.data.RegexParseResult;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
@@ -10,8 +12,25 @@ import org.apache.commons.lang3.ArrayUtils;
 @Slf4j
 public class RegexParser {
 
-    public RegexNode parseRegex(String regex) {
-        return parseRegex(regex, 0, regex.length(), true);
+    public RegexParseResult parseRegex(String regex) {
+        List<RegexFlag> flags = new ArrayList<>();
+        String regexToParse = regex;
+        if (regex.startsWith("^")) {
+            regexToParse = regexToParse.substring(1);
+            flags.add(RegexFlag.START_OF_STRING);
+        }
+        if (regex.endsWith("\\i")) {
+            regexToParse = regexToParse.substring(0, regexToParse.length() - 2);
+            flags.add(RegexFlag.CASE_INDEPENDENT_ASCII);
+        }
+        if (regex.endsWith("$")) {
+            regexToParse = regexToParse.substring(0, regexToParse.length() - 1);
+            flags.add(RegexFlag.END_OF_STRING);
+        }
+        final var parseResult = new RegexParseResult()
+            .setFirstNode(parseRegex(regexToParse, 0, regexToParse.length(), true));
+        parseResult.getFlags().addAll(flags);
+        return parseResult;
     }
 
     // todo list
@@ -96,6 +115,12 @@ public class RegexParser {
                     case '\\': {
                         i++;
                         nodeParts.add(getCharacterNode(expression, expressionStart, i));
+                        break;
+                    }
+                    case '.': {
+                        var newNode = new RegexNode()
+                            .setType(RegexNodeType.ANY);
+                        nodeParts.add(newNode);
                         break;
                     }
                     default: {

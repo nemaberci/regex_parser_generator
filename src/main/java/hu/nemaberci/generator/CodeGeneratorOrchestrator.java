@@ -9,6 +9,7 @@ import com.squareup.javapoet.TypeSpec;
 import com.thoughtworks.qdox.JavaProjectBuilder;
 import com.thoughtworks.qdox.model.JavaAnnotation;
 import hu.nemaberci.generator.regex.dfa.data.DFANode;
+import hu.nemaberci.generator.regex.dfa.data.DFANodeEdge;
 import hu.nemaberci.generator.regex.dfa.minimizer.DFAMinimizer;
 import hu.nemaberci.regex.api.RegexParser;
 import hu.nemaberci.regex.container.RegexParserContainer;
@@ -22,6 +23,8 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
 import javax.lang.model.element.Modifier;
 import lombok.extern.slf4j.Slf4j;
 
@@ -37,21 +40,9 @@ public class CodeGeneratorOrchestrator {
     public static final String LAST_SUCCESSFUL_MATCH_AT = "lastSuccessfulMatchAt";
     private static final String INSTANCE_NAME = "instance";
 
-    private static void walkTreeAndAllNeighbours(List<DFANode> nodes, DFANode curr) {
-        curr.getTransitions().forEach(
-            (character, otherNode) -> {
-                if (!nodes.contains(otherNode)) {
-                    nodes.add(otherNode);
-                    walkTreeAndAllNeighbours(nodes, otherNode);
-                }
-            }
-        );
-    }
-
     private static List<DFANode> extractAllNodes(DFANode startNode) {
         List<DFANode> allNodes = new ArrayList<>();
         List<DFANode> queue = new ArrayList<>();
-        allNodes.add(startNode);
         queue.add(startNode);
 
         while (!queue.isEmpty()) {
@@ -61,10 +52,13 @@ public class CodeGeneratorOrchestrator {
                 continue;
             }
             allNodes.add(otherNode);
-            queue.addAll(otherNode.getTransitions().values());
+            queue.addAll(otherNode.getTransitions().stream()
+                .map(DFANodeEdge::getEnd)
+                .filter(Predicate.not(queue::contains))
+                .collect(Collectors.toList())
+            );
         }
 
-        walkTreeAndAllNeighbours(allNodes, startNode);
         return allNodes;
     }
 
@@ -76,20 +70,32 @@ public class CodeGeneratorOrchestrator {
         while (!queue.isEmpty()) {
             var curr = queue.get(0);
             queue.remove(0);
-            curr.getTransitions().values().forEach(
-                other -> {
-                    if (!queue.contains(other) &&
+            curr.getTransitions().forEach(
+                edge -> {
+                    if (!queue.contains(edge.getEnd()) &&
                         (
-                            other.getDistanceFromStart() == -1 ||
-                                other.getDistanceFromStart() > curr.getDistanceFromStart()
+                            edge.getEnd().getDistanceFromStart() == -1 ||
+                                edge.getEnd().getDistanceFromStart() > curr.getDistanceFromStart()
                         )) {
-                        other.setDistanceFromStart(curr.getDistanceFromStart() + 1);
-                        queue.add(other);
+                        edge.getEnd().setDistanceFromStart(curr.getDistanceFromStart() + 1);
+                        queue.add(edge.getEnd());
                     }
                 }
             );
         }
 
+    }
+
+    private static void removeExtraEdges(DFANode startingNode) {
+        // Remove all negated edges that have a non-negated counterpart
+        for (var node : extractAllNodes(startingNode)) {
+            node.getTransitions().removeIf(
+                edge ->
+                    edge.isNegated() &&
+                        node.getTransitions().stream()
+                            .anyMatch(otherEdge -> !otherEdge.isNegated() && otherEdge.getCharacter() == edge.getCharacter())
+            );
+        }
     }
 
     private String getClassName(String originalClassName) {
@@ -99,6 +105,7 @@ public class CodeGeneratorOrchestrator {
     private CodeBlock matchesFunctionImplementation(String regex) {
         var startingNode = new DFAMinimizer().parseAndConvertAndMinimize(regex);
         calculateDistanceFromStart(startingNode);
+        removeExtraEdges(startingNode);
         var codeBlockBuilder = CodeBlock.builder();
         handleEmptyInputWithBooleanOutput(codeBlockBuilder);
         initStartingVariables(startingNode, codeBlockBuilder);
@@ -133,6 +140,7 @@ public class CodeGeneratorOrchestrator {
     private CodeBlock findMatchesFunctionImplementation(String regex, boolean lazy) {
         var startingNode = new DFAMinimizer().parseAndConvertAndMinimize(regex);
         calculateDistanceFromStart(startingNode);
+        removeExtraEdges(startingNode);
         var codeBlockBuilder = CodeBlock.builder();
         handleEmptyInputWithParseResultOutput(codeBlockBuilder);
         initStartingVariables(startingNode, codeBlockBuilder);
@@ -241,27 +249,6 @@ public class CodeGeneratorOrchestrator {
             .endControlFlow();
     }
 
-    private static void addDFANodeCaseRecursivelyForMatches(Set<DFANode> done, DFANode curr,
-        DFANode defaultNode, Builder codeBlockBuilder
-    ) {
-        if (done.contains(curr)) {
-            return;
-        }
-        done.add(curr);
-
-        codeBlockBuilder
-            .beginControlFlow("case $L:", curr.getId());
-
-        addCurrentDFANodeTransitionsForMatches(curr, defaultNode, codeBlockBuilder);
-
-        codeBlockBuilder.endControlFlow();
-
-        curr.getTransitions().forEach(
-            (character, dfaNode) -> addDFANodeCaseRecursivelyForMatches(
-                done, dfaNode, defaultNode, codeBlockBuilder)
-        );
-    }
-
     private static void addDFANodeCaseForFindMatches(
         DFANode startingNode, Builder codeBlockBuilder, boolean lazy
     ) {
@@ -283,7 +270,7 @@ public class CodeGeneratorOrchestrator {
             codeBlockBuilder.endControlFlow();
 
             curr.getTransitions().forEach(
-                (unused, dfaNode) -> queue.add(dfaNode)
+                edge -> queue.add(edge.getEnd())
             );
 
         }
@@ -304,18 +291,59 @@ public class CodeGeneratorOrchestrator {
     ) {
         if (curr.isAccepting()) {
             codeBlockBuilder.addStatement("return true");
+        } else if (curr.getTransitions().stream().anyMatch(DFANodeEdge::isWildcard)) {
+            codeBlockBuilder.addStatement("$L = $L", CURR_STATE, curr.getTransitions().stream().filter(DFANodeEdge::isWildcard).findFirst().orElseThrow().getEnd().getId());
+            codeBlockBuilder.addStatement("break");
         } else {
             codeBlockBuilder
                 .beginControlFlow("switch ($L)", CURR_CHAR);
 
             curr.getTransitions().forEach(
-                (character, dfaNode) ->
+                edge -> {
                     codeBlockBuilder
-                        .beginControlFlow("case '$L':", formatCharacter(character))
-                        .addStatement("$L = $L", CURR_STATE, dfaNode.getId())
+                        .beginControlFlow("case '$L':", formatCharacter(edge.getCharacter()));
+                    if (!edge.isNegated()) {
+                        codeBlockBuilder
+                            .addStatement("$L = $L", CURR_STATE, edge.getEnd().getId());
+                    } else {
+                        codeBlockBuilder
+                            .addStatement("$L = $L", CURR_STATE, defaultNode.getId());
+                    }
+                    codeBlockBuilder
                         .addStatement("break")
-                        .endControlFlow()
+                        .endControlFlow();
+                }
             );
+
+            addDefaultNextStateNavigation(curr, defaultNode, codeBlockBuilder);
+
+            codeBlockBuilder
+                .endControlFlow();
+
+            codeBlockBuilder.addStatement("break");
+        }
+    }
+
+    private static void addDefaultNextStateNavigation(DFANode curr, DFANode defaultNode, Builder codeBlockBuilder) {
+
+        // Can there be more than one negated edges?
+
+        // Assume that there are none.
+
+        if (curr.getTransitions().stream().anyMatch(DFANodeEdge::isNegated)) {
+
+            codeBlockBuilder
+                .beginControlFlow("default: ")
+                .addStatement("$L = $L",
+                    CURR_STATE,
+                    curr.getTransitions().stream()
+                        .filter(DFANodeEdge::isNegated)
+                        .findFirst().orElseThrow().getEnd().getId()
+                )
+                .addStatement("break")
+                .endControlFlow();
+
+        } else {
 
             codeBlockBuilder
                 .beginControlFlow("default: ")
@@ -324,10 +352,6 @@ public class CodeGeneratorOrchestrator {
                 .addStatement("break")
                 .endControlFlow();
 
-            codeBlockBuilder
-                .endControlFlow();
-
-            codeBlockBuilder.addStatement("break");
         }
     }
 
@@ -340,23 +364,37 @@ public class CodeGeneratorOrchestrator {
                 codeBlockBuilder
                     .addStatement("$L = $L", LAST_SUCCESSFUL_MATCH_AT, CURR_INDEX);
 
+                if (curr.getTransitions().stream().anyMatch(DFANodeEdge::isWildcard)) {
+                    codeBlockBuilder.addStatement("$L = $L", CURR_STATE, curr.getTransitions().stream().filter(DFANodeEdge::isWildcard).findFirst().orElseThrow().getEnd().getId());
+                    codeBlockBuilder.addStatement("break");
+                    return;
+                }
+
                 codeBlockBuilder
                     .beginControlFlow("switch ($L)", CURR_CHAR);
 
                 curr.getTransitions().forEach(
-                    (character, dfaNode) ->
+                    edge -> {
                         codeBlockBuilder
-                            .beginControlFlow("case '$L':", formatCharacter(character))
-                            .addStatement("$L = $L", CURR_STATE, dfaNode.getId())
+                            .beginControlFlow("case '$L':", formatCharacter(edge.getCharacter()));
+                        if (!edge.isNegated()) {
+                            codeBlockBuilder
+                                .addStatement("$L = $L", CURR_STATE, edge.getEnd().getId());
+                        } else {
+                            codeBlockBuilder
+                                .addStatement("$L = $L", CURR_STATE, defaultNode.getId());
+                        }
+                        codeBlockBuilder
                             .addStatement("break")
-                            .endControlFlow()
+                            .endControlFlow();
+                    }
                 );
 
                 codeBlockBuilder
                     .beginControlFlow("default: ");
 
                 addMatchSuccess(codeBlockBuilder);
-                addReturnToDefaultNode(defaultNode, codeBlockBuilder);
+                addReturnToDefaultNode(curr, defaultNode, codeBlockBuilder);
 
                 codeBlockBuilder
                     .endControlFlow();
@@ -366,7 +404,7 @@ public class CodeGeneratorOrchestrator {
 
             } else {
                 addMatchSuccess(codeBlockBuilder);
-                addReturnToDefaultNode(defaultNode, codeBlockBuilder);
+                addReturnToDefaultNode(curr, defaultNode, codeBlockBuilder);
             }
         } else {
             addNextStateNavigation(curr, defaultNode, codeBlockBuilder);
@@ -377,16 +415,30 @@ public class CodeGeneratorOrchestrator {
     private static void addNextStateNavigation(DFANode curr, DFANode defaultNode,
         Builder codeBlockBuilder
     ) {
+
+        if (curr.getTransitions().stream().anyMatch(DFANodeEdge::isWildcard)) {
+            codeBlockBuilder.addStatement("$L = $L", CURR_STATE, curr.getTransitions().stream().filter(DFANodeEdge::isWildcard).findFirst().orElseThrow().getEnd().getId());
+            return;
+        }
+
         codeBlockBuilder
             .beginControlFlow("switch ($L)", CURR_CHAR);
 
         curr.getTransitions().forEach(
-            (character, dfaNode) ->
+            edge -> {
                 codeBlockBuilder
-                    .beginControlFlow("case '$L':", formatCharacter(character))
-                    .addStatement("$L = $L", CURR_STATE, dfaNode.getId())
+                    .beginControlFlow("case '$L':", formatCharacter(edge.getCharacter()));
+                if (!edge.isNegated()) {
+                    codeBlockBuilder
+                        .addStatement("$L = $L", CURR_STATE, edge.getEnd().getId());
+                } else {
+                    codeBlockBuilder
+                        .addStatement("$L = $L", CURR_STATE, defaultNode.getId());
+                }
+                codeBlockBuilder
                     .addStatement("break")
-                    .endControlFlow()
+                    .endControlFlow();
+            }
         );
 
         codeBlockBuilder
@@ -397,11 +449,7 @@ public class CodeGeneratorOrchestrator {
 
         codeBlockBuilder.endControlFlow();
 
-        addReturnToDefaultNode(defaultNode, codeBlockBuilder);
-        if (curr.getDistanceFromStart() > 0) {
-            codeBlockBuilder
-                .addStatement("$L -= $L", CURR_INDEX, curr.getDistanceFromStart());
-        }
+        addReturnToDefaultNode(curr, defaultNode, codeBlockBuilder);
 
         codeBlockBuilder
             .addStatement("break")
@@ -420,12 +468,29 @@ public class CodeGeneratorOrchestrator {
             );
     }
 
-    private static void addReturnToDefaultNode(DFANode defaultNode,
+    private static void addReturnToDefaultNode(DFANode curr, DFANode defaultNode,
         Builder codeBlockBuilder
     ) {
-        codeBlockBuilder
-            .addStatement("$L = $L + 1", MATCH_STARTED_AT, CURR_INDEX)
-            .addStatement("$L = $L", CURR_STATE, defaultNode.getId());
+
+        if (curr.getTransitions().stream().anyMatch(DFANodeEdge::isNegated)) {
+
+            codeBlockBuilder
+                .addStatement("$L = $L",
+                    CURR_STATE,
+                    curr.getTransitions().stream()
+                        .filter(DFANodeEdge::isNegated)
+                        .findFirst().orElseThrow().getEnd().getId()
+                );
+
+        } else {
+
+            codeBlockBuilder
+                .addStatement("$L = $L + 1", MATCH_STARTED_AT, CURR_INDEX)
+                .addStatement("$L = $L", CURR_STATE, defaultNode.getId())
+                .addStatement("$L -= $L", CURR_INDEX, curr.getDistanceFromStart());
+
+        }
+
     }
 
     private static void addStateSwitchForMatches(DFANode startingNode, Builder codeBlockBuilder) {
@@ -459,7 +524,7 @@ public class CodeGeneratorOrchestrator {
             codeBlockBuilder.endControlFlow();
 
             curr.getTransitions().forEach(
-                (unused, dfaNode) -> queue.add(dfaNode)
+                edge -> queue.add(edge.getEnd())
             );
 
         }
@@ -483,7 +548,7 @@ public class CodeGeneratorOrchestrator {
         return javaAnnotation.getType().isA("hu.nemaberci.regex.annotation.RegularExpression");
     }
 
-    public void generateParser(File sourceLocation, File targetLocation, boolean lazy) {
+    public void generateParser(File sourceLocation, File targetLocation) {
 
         try {
             final var parser = new JavaProjectBuilder();
@@ -499,9 +564,11 @@ public class CodeGeneratorOrchestrator {
             var classImplBuilder = TypeSpec.classBuilder(classImplementationName)
                 .addModifiers(Modifier.PUBLIC)
                 .addSuperinterface(RegexParser.class);
-            final var regexValueStr = parsedClass.getAnnotations().stream()
+            final var annotation = parsedClass.getAnnotations().stream()
                 .filter(this::isRegexParser)
-                .findFirst().orElseThrow().getNamedParameter("value").toString();
+                .findFirst().orElseThrow();
+            final var regexValueStr = annotation.getNamedParameter("value").toString();
+            final boolean lazy = Boolean.parseBoolean(annotation.getNamedParameterMap().getOrDefault("lazy", true).toString());
             final var regexValue = regexValueStr.substring(1, regexValueStr.length() - 1);
 
             classImplBuilder
@@ -552,12 +619,6 @@ public class CodeGeneratorOrchestrator {
         } catch (IOException e) {
             e.printStackTrace();
         }
-
-    }
-
-    public void generateParser(File sourceLocation, File targetLocation) {
-
-        this.generateParser(sourceLocation, targetLocation, true);
 
     }
 

@@ -3,6 +3,7 @@ package hu.nemaberci.generator.regex.dfa;
 import static hu.nemaberci.generator.regex.nfa.RegexToNFAParser.EPSILON;
 
 import hu.nemaberci.generator.regex.dfa.data.DFANode;
+import hu.nemaberci.generator.regex.dfa.data.DFANodeEdge;
 import hu.nemaberci.generator.regex.nfa.RegexToNFAParser;
 import hu.nemaberci.generator.regex.nfa.data.NFANode;
 import hu.nemaberci.generator.regex.nfa.data.NFANode.NFANodeType;
@@ -11,6 +12,11 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.experimental.Accessors;
 import org.apache.commons.lang3.StringUtils;
 
 public class NFAToDFAConverter {
@@ -59,17 +65,21 @@ public class NFAToDFAConverter {
         int i = 0;
         while (i < createdNodes.size()) {
             var currDFANode = createdNodes.get(i++);
-            Map<Character, List<NFANode>> reachableNFANodes = new HashMap<>();
+            Map<Transition, List<NFANode>> reachableNFANodes = new HashMap<>();
             for (var containedNFANode : currDFANode.getItems()) {
                 for (var nfaEdge : containedNFANode.getEdges()) {
                     if (nfaEdge.getCharacter() != EPSILON) {
                         reachableNFANodes.computeIfAbsent(
-                                nfaEdge.getCharacter(), unused -> new ArrayList<>())
+                                new Transition()
+                                    .setC(nfaEdge.getCharacter())
+                                    .setNegated(containedNFANode.getType().equals(NFANodeType.NEGATED))
+                                    .setWildcard(nfaEdge.isWildcard()),
+                                unused -> new ArrayList<>())
                             .add(nfaEdge.getEnd());
                     }
                 }
             }
-            Map<List<NFANode>, List<Character>> nfaNodeCollectionsToCharactersMap = new HashMap<>();
+            Map<List<NFANode>, List<Transition>> nfaNodeCollectionsToCharactersMap = new HashMap<>();
             reachableNFANodes.forEach(
                 (character, nfaNodes) ->
                     nfaNodeCollectionsToCharactersMap.computeIfAbsent(
@@ -77,11 +87,10 @@ public class NFAToDFAConverter {
                         .add(character)
             );
             nfaNodeCollectionsToCharactersMap.forEach(
-                (nfaNodes, characters) -> {
+                (nfaNodes, transitions) -> {
                     var newDFANode = reachableNFANodes(nfaNodes);
                     DFANode dfaNode;
-                    newDFANode.getSymbols().addAll(characters);
-                    final var existingNode = createdNodes.stream().filter(node -> node.getItems().equals(newDFANode.getItems()) && node.getSymbols().equals(newDFANode.getSymbols())).findAny().orElse(null);
+                    final var existingNode = createdNodes.stream().filter(node -> node.getItems().equals(newDFANode.getItems())).findAny().orElse(null);
                     if (existingNode != null) {
                         dfaNode = existingNode;
                     } else {
@@ -89,14 +98,27 @@ public class NFAToDFAConverter {
                         newDFANode.setId(nodeId++);
                         dfaNode = newDFANode;
                     }
-                    characters.forEach(
-                        c -> currDFANode.getTransitions().put(c, dfaNode)
+                    transitions.forEach(
+                        t -> currDFANode.getTransitions().add(new DFANodeEdge().setCharacter(t.getC()).setEnd(dfaNode).setNegated(t.isNegated()).setWildcard(t.isWildcard()))
                     );
                 }
             );
         }
 
         return startingDFANode;
+
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @Accessors(chain = true)
+    @EqualsAndHashCode
+    private static class Transition {
+
+        private Character c;
+        private boolean negated = false;
+        private boolean wildcard = false;
 
     }
 

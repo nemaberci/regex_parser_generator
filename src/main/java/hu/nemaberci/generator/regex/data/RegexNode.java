@@ -45,7 +45,8 @@ public class RegexNode {
         CONCATENATION, // +
         ALTERNATION, // ?
         CHARACTER_RANGE, // []
-        NEGATED_CHARACTER_RANGE // [^]
+        NEGATED_CHARACTER_RANGE, // [^]
+        ANY // .
     }
 
 }

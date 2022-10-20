@@ -3,8 +3,10 @@ package hu.nemaberci.generator.regex.dfa.data;
 import hu.nemaberci.generator.regex.nfa.data.NFANode;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import lombok.EqualsAndHashCode;
 import lombok.EqualsAndHashCode.Exclude;
 import lombok.Getter;
@@ -21,11 +23,9 @@ public class DFANode {
 
     private int id = -1;
     private boolean accepting = false;
-    private final List<Character> symbols = new ArrayList<>();
     private final List<NFANode> items = new ArrayList<>();
     @Exclude
-    private final Map<Character, DFANode> transitions = new HashMap<>();
-    private boolean negated = false;
+    private final Set<DFANodeEdge> transitions = new HashSet<>();
     @Exclude
     private int distanceFromStart = -1;
 

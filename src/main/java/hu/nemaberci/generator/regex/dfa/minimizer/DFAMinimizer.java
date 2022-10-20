@@ -2,18 +2,25 @@ package hu.nemaberci.generator.regex.dfa.minimizer;
 
 import hu.nemaberci.generator.regex.dfa.NFAToDFAConverter;
 import hu.nemaberci.generator.regex.dfa.data.DFANode;
+import hu.nemaberci.generator.regex.dfa.data.DFANodeEdge;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.experimental.Accessors;
 
 public class DFAMinimizer {
 
     public DFANode hopcroft(
-        List<Character> alphabet,
+        List<Transition> alphabet,
         List<DFANode> dfaNodes,
         DFANode startNode
     ) {
@@ -45,9 +52,12 @@ public class DFAMinimizer {
                 List<DFANode> canSeeS = new ArrayList<>();
                 for (var dfaNode : dfaNodes) {
                     if (
-                        dfaNode.getTransitions().containsKey(c) &&
+                        dfaNode.getTransitions().stream()
+                            .anyMatch(hasEdgeWithCharacter(c)) &&
                             curr.contains(
-                                dfaNode.getTransitions().get(c)
+                                dfaNode.getTransitions().stream()
+                                    .filter(hasEdgeWithCharacter(c))
+                                    .findFirst().get().getEnd()
                             )
                     ) {
                         canSeeS.add(dfaNode);
@@ -108,17 +118,15 @@ public class DFAMinimizer {
                 newStartingNode = newDFANodes.get(i);
             }
             for (var node : partitions.get(i)) {
-                for (var c : node.getTransitions().entrySet()) {
-                    newDFANodes.get(i).getTransitions()
-                        .put(
-                            c.getKey(),
-                            oldToNewDFAMap.get(c.getValue().getId())
-                        );
-                }
+                newDFANodes.get(i).getTransitions().addAll(node.getTransitions());
             }
         }
 
         return newStartingNode;
+    }
+
+    private static Predicate<DFANodeEdge> hasEdgeWithCharacter(Transition c) {
+        return edge -> edge.isNegated() == c.isNegated() && edge.getCharacter() == c.getC();
     }
 
     public DFANode parseAndConvertAndMinimize(String regex) {
@@ -133,28 +141,47 @@ public class DFAMinimizer {
 
     private static List<DFANode> extractAllNodes(DFANode startNode) {
         List<DFANode> allNodes = new ArrayList<>();
-        allNodes.add(startNode);
-        walkTreeAndAllNeighbours(allNodes, startNode);
+        List<DFANode> queue = new ArrayList<>();
+        queue.add(startNode);
+
+        while (!queue.isEmpty()) {
+            var otherNode = queue.get(0);
+            queue.remove(0);
+            if (allNodes.contains(otherNode)) {
+                continue;
+            }
+            allNodes.add(otherNode);
+            queue.addAll(otherNode.getTransitions().stream()
+                .map(DFANodeEdge::getEnd)
+                .filter(Predicate.not(queue::contains))
+                .collect(Collectors.toList())
+            );
+        }
+
         return allNodes;
     }
 
-    private static void walkTreeAndAllNeighbours(List<DFANode> nodes, DFANode curr) {
-        curr.getTransitions().forEach(
-            (character, otherNode) -> {
-                if (!nodes.contains(otherNode)) {
-                    nodes.add(otherNode);
-                    walkTreeAndAllNeighbours(nodes, otherNode);
-                }
-            }
-        );
-    }
-
-    private static List<Character> extractAlphabet(List<DFANode> allNodes) {
-        Set<Character> alphabet = new HashSet<>();
+    private static List<Transition> extractAlphabet(List<DFANode> allNodes) {
+        Set<Transition> alphabet = new HashSet<>();
         for (var node : allNodes) {
-            alphabet.addAll(node.getTransitions().keySet());
+            alphabet.addAll(
+                node.getTransitions().stream()
+                    .map(edge -> new Transition().setC(edge.getCharacter()).setNegated(edge.isNegated()))
+                    .collect(Collectors.toList()));
         }
         return new ArrayList<>(alphabet);
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @Accessors(chain = true)
+    @EqualsAndHashCode
+    private static class Transition {
+
+        private Character c;
+        private boolean negated = false;
+
     }
 
 }

@@ -11,7 +11,13 @@ import lombok.experimental.Accessors;
 @Accessors(chain = true)
 public class DFANodeEdge {
 
+    private boolean negated = false;
+    private boolean wildcard = false;
     private char character;
     private DFANode end;
 
+    @Override
+    public String toString() {
+        return (wildcard ? "*" : "") + (negated ? "!" : "") + character + " --> " + end;
+    }
 }
