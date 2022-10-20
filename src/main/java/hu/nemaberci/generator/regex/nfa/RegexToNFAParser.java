@@ -5,7 +5,11 @@ import hu.nemaberci.generator.regex.nfa.data.NFANode;
 import hu.nemaberci.generator.regex.nfa.data.NFANode.NFANodeType;
 import hu.nemaberci.generator.regex.nfa.data.NFANodeEdge;
 import hu.nemaberci.generator.regex.parser.RegexParser;
+import java.util.Arrays;
 import java.util.List;
+import org.apache.commons.lang3.CharSequenceUtils;
+import org.apache.commons.lang3.CharUtils;
+import org.apache.commons.lang3.StringUtils;
 
 public class RegexToNFAParser {
 
@@ -108,7 +112,13 @@ public class RegexToNFAParser {
                 break;
             }
             case NEGATED_CHARACTER_RANGE:{
-                // todo
+                for (int c = 32; c < 128; c++) {
+                    if (Arrays.binarySearch(regexNode.getCharacters(), (char) c) < 0) {
+                        startNode.getEdges().add(
+                            new NFANodeEdge().setEnd(endNode).setCharacter((char) c)
+                        );
+                    }
+                }
                 break;
             }
         }

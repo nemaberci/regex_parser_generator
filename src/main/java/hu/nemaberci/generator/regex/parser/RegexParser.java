@@ -171,7 +171,6 @@ public class RegexParser {
         } else {
             newNode.getParts().add(containedNode.copy());
             handleStar(newNode.getParts());
-            ;
         }
         nodeParts.set(nodeParts.size() - 1, newNode);
         i = bracketClosedAt;
@@ -249,6 +248,7 @@ public class RegexParser {
             }
             j++;
         }
+        charList.sort(Character::compareTo);
         newNode.setCharacters(
             ArrayUtils.toPrimitive(charList.toArray(new Character[0]))
         );

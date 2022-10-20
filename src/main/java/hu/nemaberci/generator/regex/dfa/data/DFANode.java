@@ -19,7 +19,6 @@ import lombok.experimental.Accessors;
 @EqualsAndHashCode
 public class DFANode {
 
-    @Exclude
     private int id = -1;
     private boolean accepting = false;
     private final List<Character> symbols = new ArrayList<>();
@@ -27,10 +26,12 @@ public class DFANode {
     @Exclude
     private final Map<Character, DFANode> transitions = new HashMap<>();
     private boolean negated = false;
+    @Exclude
+    private int distanceFromStart = -1;
 
-    //@Override
-    //public String toString() {
-    //    return ToStringBuilder.reflectionToString(this, ToStringStyle.JSON_STYLE);
-    //}
+    @Override
+    public String toString() {
+        return Integer.toString(id);
+    }
 
 }

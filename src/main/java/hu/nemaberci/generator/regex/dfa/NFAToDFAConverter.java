@@ -3,17 +3,15 @@ package hu.nemaberci.generator.regex.dfa;
 import static hu.nemaberci.generator.regex.nfa.RegexToNFAParser.EPSILON;
 
 import hu.nemaberci.generator.regex.dfa.data.DFANode;
-import hu.nemaberci.generator.regex.dfa.data.DFANodeEdge;
 import hu.nemaberci.generator.regex.nfa.RegexToNFAParser;
 import hu.nemaberci.generator.regex.nfa.data.NFANode;
 import hu.nemaberci.generator.regex.nfa.data.NFANode.NFANodeType;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
+import org.apache.commons.lang3.StringUtils;
 
 public class NFAToDFAConverter {
 
@@ -65,7 +63,8 @@ public class NFAToDFAConverter {
             for (var containedNFANode : currDFANode.getItems()) {
                 for (var nfaEdge : containedNFANode.getEdges()) {
                     if (nfaEdge.getCharacter() != EPSILON) {
-                        reachableNFANodes.computeIfAbsent(nfaEdge.getCharacter(), unused -> new ArrayList<>())
+                        reachableNFANodes.computeIfAbsent(
+                                nfaEdge.getCharacter(), unused -> new ArrayList<>())
                             .add(nfaEdge.getEnd());
                     }
                 }
@@ -73,7 +72,8 @@ public class NFAToDFAConverter {
             Map<List<NFANode>, List<Character>> nfaNodeCollectionsToCharactersMap = new HashMap<>();
             reachableNFANodes.forEach(
                 (character, nfaNodes) ->
-                    nfaNodeCollectionsToCharactersMap.computeIfAbsent(nfaNodes, unused -> new ArrayList<>())
+                    nfaNodeCollectionsToCharactersMap.computeIfAbsent(
+                            nfaNodes, unused -> new ArrayList<>())
                         .add(character)
             );
             nfaNodeCollectionsToCharactersMap.forEach(
@@ -81,8 +81,9 @@ public class NFAToDFAConverter {
                     var newDFANode = reachableNFANodes(nfaNodes);
                     DFANode dfaNode;
                     newDFANode.getSymbols().addAll(characters);
-                    if (createdNodes.contains(newDFANode)) {
-                        dfaNode = createdNodes.get(createdNodes.indexOf(newDFANode));
+                    final var existingNode = createdNodes.stream().filter(node -> node.getItems().equals(newDFANode.getItems()) && node.getSymbols().equals(newDFANode.getSymbols())).findAny().orElse(null);
+                    if (existingNode != null) {
+                        dfaNode = existingNode;
                     } else {
                         createdNodes.add(newDFANode);
                         newDFANode.setId(nodeId++);
