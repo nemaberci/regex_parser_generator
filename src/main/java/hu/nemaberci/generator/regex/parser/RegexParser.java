@@ -15,15 +15,29 @@ public class RegexParser {
     public RegexParseResult parseRegex(String regex) {
         List<RegexFlag> flags = new ArrayList<>();
         String regexToParse = regex;
-        if (regex.startsWith("^")) {
+        boolean hasUnparsedFlags = true;
+        if (regexToParse.startsWith("^")) {
             regexToParse = regexToParse.substring(1);
             flags.add(RegexFlag.START_OF_STRING);
         }
-        if (regex.endsWith("\\i")) {
-            regexToParse = regexToParse.substring(0, regexToParse.length() - 2);
-            flags.add(RegexFlag.CASE_INDEPENDENT_ASCII);
+        while (hasUnparsedFlags) {
+            switch (regexToParse.substring(regexToParse.length() - 2)) {
+                case "\\i": {
+                    regexToParse = regexToParse.substring(0, regexToParse.length() - 2);
+                    flags.add(RegexFlag.CASE_INDEPENDENT_ASCII);
+                    break;
+                }
+                case "\\l": {
+                    regexToParse = regexToParse.substring(0, regexToParse.length() - 2);
+                    flags.add(RegexFlag.LAZY);
+                    break;
+                }
+                default: {
+                    hasUnparsedFlags = false;
+                }
+            }
         }
-        if (regex.endsWith("$")) {
+        if (regexToParse.endsWith("$")) {
             regexToParse = regexToParse.substring(0, regexToParse.length() - 1);
             flags.add(RegexFlag.END_OF_STRING);
         }
@@ -34,10 +48,7 @@ public class RegexParser {
     }
 
     // todo list
-    // 1. Fully support escaping characters
     // 2. Support named capture groups
-    // 3. Support regex flags
-    // 4. Support start and end of line characters ($ and ^)
     private RegexNode parseRegex(String expression, int expressionStart, int expressionEnd,
         boolean newExpression
     ) {
@@ -205,10 +216,8 @@ public class RegexParser {
     private int handleBracket(String expression, int expressionStart, List<RegexNode> nodeParts,
         int i
     ) {
-        int stack = 0;
-        int last = 0;
-        last = ++i;
-        stack = 1;
+        int last = ++i;
+        int stack = 1;
         while (i < expression.length() && stack != 0) {
             if (expression.charAt(i) == '(' && (i > 0 && expression.charAt(i - 1) != '\\')) {
                 stack++;

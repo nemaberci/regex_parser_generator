@@ -1,5 +1,7 @@
 package hu.nemaberci.generator;
 
+import static hu.nemaberci.generator.regex.dfa.util.DFAUtils.extractAllNodes;
+
 import com.squareup.javapoet.CodeBlock;
 import com.squareup.javapoet.CodeBlock.Builder;
 import com.squareup.javapoet.FieldSpec;
@@ -8,8 +10,9 @@ import com.squareup.javapoet.MethodSpec;
 import com.squareup.javapoet.TypeSpec;
 import com.thoughtworks.qdox.JavaProjectBuilder;
 import com.thoughtworks.qdox.model.JavaAnnotation;
+import hu.nemaberci.generator.regex.data.RegexFlag;
 import hu.nemaberci.generator.regex.dfa.data.DFANode;
-import hu.nemaberci.generator.regex.dfa.data.DFANodeEdge;
+import hu.nemaberci.generator.regex.dfa.data.DFAParseResult;
 import hu.nemaberci.generator.regex.dfa.minimizer.DFAMinimizer;
 import hu.nemaberci.regex.api.RegexParser;
 import hu.nemaberci.regex.container.RegexParserContainer;
@@ -18,15 +21,18 @@ import hu.nemaberci.regex.data.ParseResultMatch;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.Set;
-import java.util.function.Predicate;
-import java.util.stream.Collectors;
 import javax.lang.model.element.Modifier;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.CharUtils;
 
 @Slf4j
 public class CodeGeneratorOrchestrator {
@@ -40,29 +46,7 @@ public class CodeGeneratorOrchestrator {
     public static final String LAST_SUCCESSFUL_MATCH_AT = "lastSuccessfulMatchAt";
     private static final String INSTANCE_NAME = "instance";
 
-    private static List<DFANode> extractAllNodes(DFANode startNode) {
-        List<DFANode> allNodes = new ArrayList<>();
-        List<DFANode> queue = new ArrayList<>();
-        queue.add(startNode);
-
-        while (!queue.isEmpty()) {
-            var otherNode = queue.get(0);
-            queue.remove(0);
-            if (allNodes.contains(otherNode)) {
-                continue;
-            }
-            allNodes.add(otherNode);
-            queue.addAll(otherNode.getTransitions().stream()
-                .map(DFANodeEdge::getEnd)
-                .filter(Predicate.not(queue::contains))
-                .collect(Collectors.toList())
-            );
-        }
-
-        return allNodes;
-    }
-
-    private static void calculateDistanceFromStart(DFANode startNode) {
+    private static void calculateDistanceFromStartAndAddParents(DFANode startNode) {
         startNode.setDistanceFromStart(0);
         List<DFANode> queue = new ArrayList<>();
         queue.add(startNode);
@@ -70,15 +54,14 @@ public class CodeGeneratorOrchestrator {
         while (!queue.isEmpty()) {
             var curr = queue.get(0);
             queue.remove(0);
-            curr.getTransitions().forEach(
-                edge -> {
-                    if (!queue.contains(edge.getEnd()) &&
-                        (
-                            edge.getEnd().getDistanceFromStart() == -1 ||
-                                edge.getEnd().getDistanceFromStart() > curr.getDistanceFromStart()
-                        )) {
-                        edge.getEnd().setDistanceFromStart(curr.getDistanceFromStart() + 1);
-                        queue.add(edge.getEnd());
+            curr.getTransitions().values().stream().filter(Objects::nonNull).forEach(
+                node -> {
+                    if (!node.getParents().contains(curr)) {
+                        node.getParents().add(curr);
+                        if (node.getDistanceFromStart() < curr.getDistanceFromStart()) {
+                            node.setDistanceFromStart(curr.getDistanceFromStart() + 1);
+                            queue.add(node);
+                        }
                     }
                 }
             );
@@ -86,32 +69,37 @@ public class CodeGeneratorOrchestrator {
 
     }
 
-    private static void removeExtraEdges(DFANode startingNode) {
-        // Remove all negated edges that have a non-negated counterpart
-        for (var node : extractAllNodes(startingNode)) {
-            node.getTransitions().removeIf(
-                edge ->
-                    edge.isNegated() &&
-                        node.getTransitions().stream()
-                            .anyMatch(otherEdge -> !otherEdge.isNegated() && otherEdge.getCharacter() == edge.getCharacter())
-            );
-        }
-    }
-
     private String getClassName(String originalClassName) {
         return originalClassName + "_impl";
     }
 
-    private CodeBlock matchesFunctionImplementation(String regex) {
-        var startingNode = new DFAMinimizer().parseAndConvertAndMinimize(regex);
-        calculateDistanceFromStart(startingNode);
-        removeExtraEdges(startingNode);
+    private CodeBlock matchesFunctionImplementation(DFAParseResult parseResult) {
         var codeBlockBuilder = CodeBlock.builder();
         handleEmptyInputWithBooleanOutput(codeBlockBuilder);
-        initStartingVariables(startingNode, codeBlockBuilder);
-        addMainWhileLoopForMatches(startingNode, codeBlockBuilder);
-        checkIfStateIsAcceptingAndReturn(startingNode, codeBlockBuilder);
+        initStartingVariables(parseResult.getStartingNode(), codeBlockBuilder);
+        addMainWhileLoopForMatches(parseResult, codeBlockBuilder);
+        checkIfStateIsAcceptingAndReturn(parseResult.getStartingNode(), codeBlockBuilder);
         return codeBlockBuilder.build();
+    }
+
+    private static void addAlternateEdges(DFANode startingNode) {
+
+        for (var node : extractAllNodes(startingNode)) {
+            node.getTransitions().keySet().stream()
+                .filter(CharUtils::isAsciiPrintable)
+                .forEach(c -> {
+                    char otherCaseChar = Character.isUpperCase(c) ?
+                        Character.toLowerCase(c) :
+                        Character.toUpperCase(c);
+                    if (!node.getTransitions().containsKey(otherCaseChar)) {
+                        node.getTransitions().put(
+                            otherCaseChar,
+                            node.getTransitions().get(c)
+                        );
+                    }
+                });
+        }
+
     }
 
     private static void checkIfStateIsAcceptingAndReturn(DFANode startingNode,
@@ -137,16 +125,13 @@ public class CodeGeneratorOrchestrator {
             .endControlFlow();
     }
 
-    private CodeBlock findMatchesFunctionImplementation(String regex, boolean lazy) {
-        var startingNode = new DFAMinimizer().parseAndConvertAndMinimize(regex);
-        calculateDistanceFromStart(startingNode);
-        removeExtraEdges(startingNode);
+    private CodeBlock findMatchesFunctionImplementation(DFAParseResult parseResult) {
         var codeBlockBuilder = CodeBlock.builder();
         handleEmptyInputWithParseResultOutput(codeBlockBuilder);
-        initStartingVariables(startingNode, codeBlockBuilder);
+        initStartingVariables(parseResult.getStartingNode(), codeBlockBuilder);
         initFindMatchesVariables(codeBlockBuilder);
-        addMainWhileLoopForFindMatches(startingNode, codeBlockBuilder, lazy);
-        checkIfMatchWasFound(startingNode, codeBlockBuilder);
+        addMainWhileLoopForFindMatches(parseResult, codeBlockBuilder);
+        checkIfMatchWasFound(parseResult.getStartingNode(), codeBlockBuilder);
         returnDefaultValueWithParseResultOutput(codeBlockBuilder);
         return codeBlockBuilder.build();
     }
@@ -181,8 +166,8 @@ public class CodeGeneratorOrchestrator {
     private static void initFindMatchesVariables(Builder codeBlockBuilder) {
         codeBlockBuilder
             .addStatement(
-                "$T<$T> $L = new $T<>()", List.class, ParseResultMatch.class, FOUND,
-                ArrayList.class
+                "$T<$T> $L = new $T<>()", ArrayDeque.class, ParseResultMatch.class, FOUND,
+                ArrayDeque.class
             )
             .addStatement("$T $L = 0", int.class, LAST_SUCCESSFUL_MATCH_AT)
             .addStatement("$T $L = 0", int.class, MATCH_STARTED_AT);
@@ -213,25 +198,8 @@ public class CodeGeneratorOrchestrator {
             .endControlFlow();
     }
 
-    private static void addMainWhileLoopForMatches(DFANode startingNode, Builder codeBlockBuilder) {
-        // Start while
-        codeBlockBuilder
-            .beginControlFlow("while ($L < $L.length())", CURR_INDEX, FUNCTION_INPUT_VARIABLE_NAME);
-
-        codeBlockBuilder
-            .addStatement(
-                "char $L = $L.charAt($L)", CURR_CHAR, FUNCTION_INPUT_VARIABLE_NAME, CURR_INDEX);
-        addStateSwitchForMatches(startingNode, codeBlockBuilder);
-
-        codeBlockBuilder
-            .addStatement("$L++", CURR_INDEX);
-        // End while
-        codeBlockBuilder
-            .endControlFlow();
-    }
-
-    private static void addMainWhileLoopForFindMatches(DFANode startingNode,
-        Builder codeBlockBuilder, boolean lazy
+    private static void addMainWhileLoopForMatches(DFAParseResult parseResult,
+        Builder codeBlockBuilder
     ) {
         // Start while
         codeBlockBuilder
@@ -240,38 +208,55 @@ public class CodeGeneratorOrchestrator {
         codeBlockBuilder
             .addStatement(
                 "char $L = $L.charAt($L)", CURR_CHAR, FUNCTION_INPUT_VARIABLE_NAME, CURR_INDEX);
-        addStateSwitchForFindMatches(startingNode, codeBlockBuilder, lazy);
+        addStateSwitchForMatches(parseResult, codeBlockBuilder);
 
         codeBlockBuilder
             .addStatement("$L++", CURR_INDEX);
         // End while
         codeBlockBuilder
+            .endControlFlow();
+    }
+
+    private static void addMainWhileLoopForFindMatches(DFAParseResult parseResult,
+        Builder codeBlockBuilder
+    ) {
+        codeBlockBuilder
+            .beginControlFlow("while ($L < $L.length())", CURR_INDEX, FUNCTION_INPUT_VARIABLE_NAME)
+            .addStatement(
+                "char $L = $L.charAt($L)", CURR_CHAR, FUNCTION_INPUT_VARIABLE_NAME, CURR_INDEX);
+
+        addStateSwitchForFindMatches(parseResult, codeBlockBuilder);
+
+        codeBlockBuilder
+            .addStatement("$L++", CURR_INDEX)
             .endControlFlow();
     }
 
     private static void addDFANodeCaseForFindMatches(
-        DFANode startingNode, Builder codeBlockBuilder, boolean lazy
+        DFAParseResult parseResult, Builder codeBlockBuilder
     ) {
         Set<DFANode> done = new HashSet<>();
         Set<DFANode> queue = new HashSet<>();
-        queue.add(startingNode);
+        queue.add(parseResult.getStartingNode());
         while (!queue.isEmpty()) {
             var curr = queue.iterator().next();
             queue.remove(curr);
-            if (done.contains(curr)) {
+            if (done.contains(curr) || curr == null) {
                 continue;
             }
             done.add(curr);
 
             codeBlockBuilder.beginControlFlow("case $L:", curr.getId());
 
-            addCurrentDFANodeTransitionsForFindMatches(curr, startingNode, codeBlockBuilder, lazy);
+            addCurrentDFANodeTransitionsForFindMatches(
+                curr, parseResult.getStartingNode(), codeBlockBuilder, parseResult.getFlags());
 
             codeBlockBuilder.endControlFlow();
 
-            curr.getTransitions().forEach(
-                edge -> queue.add(edge.getEnd())
-            );
+            queue.addAll(curr.getTransitions().values());
+            if (curr.getDefaultTransition() != null) {
+                queue.add(curr.getDefaultTransition());
+            }
 
         }
     }
@@ -287,35 +272,19 @@ public class CodeGeneratorOrchestrator {
     }
 
     private static void addCurrentDFANodeTransitionsForMatches(DFANode curr, DFANode defaultNode,
-        Builder codeBlockBuilder
+        Builder codeBlockBuilder, Collection<RegexFlag> flags
     ) {
-        if (curr.isAccepting()) {
+        if (curr.isAccepting() && !flags.contains(RegexFlag.END_OF_STRING)) {
             codeBlockBuilder.addStatement("return true");
-        } else if (curr.getTransitions().stream().anyMatch(DFANodeEdge::isWildcard)) {
-            codeBlockBuilder.addStatement("$L = $L", CURR_STATE, curr.getTransitions().stream().filter(DFANodeEdge::isWildcard).findFirst().orElseThrow().getEnd().getId());
-            codeBlockBuilder.addStatement("break");
         } else {
             codeBlockBuilder
                 .beginControlFlow("switch ($L)", CURR_CHAR);
 
-            curr.getTransitions().forEach(
-                edge -> {
-                    codeBlockBuilder
-                        .beginControlFlow("case '$L':", formatCharacter(edge.getCharacter()));
-                    if (!edge.isNegated()) {
-                        codeBlockBuilder
-                            .addStatement("$L = $L", CURR_STATE, edge.getEnd().getId());
-                    } else {
-                        codeBlockBuilder
-                            .addStatement("$L = $L", CURR_STATE, defaultNode.getId());
-                    }
-                    codeBlockBuilder
-                        .addStatement("break")
-                        .endControlFlow();
-                }
+            curr.getTransitions().entrySet().forEach(
+                edge -> caseOfEdge(curr, defaultNode, codeBlockBuilder, edge, false)
             );
 
-            addDefaultNextStateNavigation(curr, defaultNode, codeBlockBuilder);
+            addDefaultNextStateNavigation(curr, defaultNode, codeBlockBuilder, flags);
 
             codeBlockBuilder
                 .endControlFlow();
@@ -324,132 +293,142 @@ public class CodeGeneratorOrchestrator {
         }
     }
 
-    private static void addDefaultNextStateNavigation(DFANode curr, DFANode defaultNode, Builder codeBlockBuilder) {
+    private static void addDefaultNextStateNavigation(DFANode curr, DFANode defaultNode,
+        Builder codeBlockBuilder, Collection<RegexFlag> flags
+    ) {
 
         // Can there be more than one negated edges?
 
         // Assume that there are none.
 
-        if (curr.getTransitions().stream().anyMatch(DFANodeEdge::isNegated)) {
+        if (flags.contains(RegexFlag.START_OF_STRING)) {
 
             codeBlockBuilder
-                .beginControlFlow("default: ")
-                .addStatement("$L = $L",
-                    CURR_STATE,
-                    curr.getTransitions().stream()
-                        .filter(DFANodeEdge::isNegated)
-                        .findFirst().orElseThrow().getEnd().getId()
-                )
-                .addStatement("break")
+                .beginControlFlow("default:")
+                .addStatement("return false")
                 .endControlFlow();
 
         } else {
 
-            codeBlockBuilder
-                .beginControlFlow("default: ")
-                .addStatement("$L = $L", CURR_STATE, defaultNode.getId())
-                .addStatement("$L -= $L", CURR_INDEX, curr.getDistanceFromStart())
-                .addStatement("break")
-                .endControlFlow();
+            if (curr.getDefaultTransition() != null) {
+
+                codeBlockBuilder
+                    .beginControlFlow("default: ")
+                    .addStatement(
+                        "$L = $L",
+                        CURR_STATE,
+                        curr.getDefaultTransition().getId()
+                    )
+                    .addStatement("break")
+                    .endControlFlow();
+
+            } else {
+
+                // TODO: FIND BETTER PLACE TO JUMP BACK TO
+                codeBlockBuilder
+                    .beginControlFlow("default: ")
+                    .addStatement("$L = $L", CURR_STATE, defaultNode.getId())
+                    .addStatement("$L -= $L", CURR_INDEX, curr.getDistanceFromStart())
+                    .addStatement("break")
+                    .endControlFlow();
+
+            }
 
         }
     }
 
     private static void addCurrentDFANodeTransitionsForFindMatches(DFANode curr,
         DFANode defaultNode,
-        Builder codeBlockBuilder, boolean lazy
+        Builder codeBlockBuilder,
+        Collection<RegexFlag> flags
     ) {
         if (curr.isAccepting()) {
-            if (lazy) {
+            if (curr.getTransitions().isEmpty()) {
                 codeBlockBuilder
-                    .addStatement("$L = $L", LAST_SUCCESSFUL_MATCH_AT, CURR_INDEX);
-
-                if (curr.getTransitions().stream().anyMatch(DFANodeEdge::isWildcard)) {
-                    codeBlockBuilder.addStatement("$L = $L", CURR_STATE, curr.getTransitions().stream().filter(DFANodeEdge::isWildcard).findFirst().orElseThrow().getEnd().getId());
-                    codeBlockBuilder.addStatement("break");
-                    return;
-                }
-
-                codeBlockBuilder
-                    .beginControlFlow("switch ($L)", CURR_CHAR);
-
-                curr.getTransitions().forEach(
-                    edge -> {
-                        codeBlockBuilder
-                            .beginControlFlow("case '$L':", formatCharacter(edge.getCharacter()));
-                        if (!edge.isNegated()) {
-                            codeBlockBuilder
-                                .addStatement("$L = $L", CURR_STATE, edge.getEnd().getId());
-                        } else {
-                            codeBlockBuilder
-                                .addStatement("$L = $L", CURR_STATE, defaultNode.getId());
-                        }
-                        codeBlockBuilder
-                            .addStatement("break")
-                            .endControlFlow();
-                    }
-                );
-
-                codeBlockBuilder
-                    .beginControlFlow("default: ");
-
-                addMatchSuccess(codeBlockBuilder);
-                addReturnToDefaultNode(curr, defaultNode, codeBlockBuilder);
-
-                codeBlockBuilder
-                    .endControlFlow();
-
-                codeBlockBuilder
-                    .endControlFlow();
-
+                    .addStatement(
+                        "$L.add(new $T($L, $L))", FOUND, ParseResultMatch.class, MATCH_STARTED_AT,
+                        CURR_INDEX
+                    )
+                    .addStatement("$L--", CURR_INDEX)
+                    .addStatement("$L = $L  + 1", MATCH_STARTED_AT, CURR_INDEX)
+                    .addStatement("$L = $L", LAST_SUCCESSFUL_MATCH_AT, CURR_INDEX)
+                    .addStatement("$L = $L", CURR_STATE, defaultNode.getId());
             } else {
-                addMatchSuccess(codeBlockBuilder);
-                addReturnToDefaultNode(curr, defaultNode, codeBlockBuilder);
+                if (flags.contains(RegexFlag.LAZY)) {
+                    codeBlockBuilder.addStatement("$L = $L", LAST_SUCCESSFUL_MATCH_AT, CURR_INDEX);
+
+                    lazyCharSwitch(curr, defaultNode, codeBlockBuilder, flags);
+
+                } else {
+                    if (!flags.contains(RegexFlag.END_OF_STRING) && curr.getDefaultTransition() == null) {
+                        addMatchSuccess(codeBlockBuilder);
+                    }
+                    addReturnToDefaultNode(curr, defaultNode, codeBlockBuilder, flags);
+                }
             }
         } else {
-            addNextStateNavigation(curr, defaultNode, codeBlockBuilder);
+            addNextStateNavigation(curr, defaultNode, codeBlockBuilder, flags);
         }
         codeBlockBuilder.addStatement("break");
     }
 
-    private static void addNextStateNavigation(DFANode curr, DFANode defaultNode,
-        Builder codeBlockBuilder
+    private static void lazyCharSwitch(DFANode curr, DFANode defaultNode, Builder codeBlockBuilder,
+        Collection<RegexFlag> flags
     ) {
+        codeBlockBuilder
+            .beginControlFlow("switch ($L)", CURR_CHAR);
 
-        if (curr.getTransitions().stream().anyMatch(DFANodeEdge::isWildcard)) {
-            codeBlockBuilder.addStatement("$L = $L", CURR_STATE, curr.getTransitions().stream().filter(DFANodeEdge::isWildcard).findFirst().orElseThrow().getEnd().getId());
-            return;
+        curr.getTransitions().entrySet().forEach(
+            edge -> caseOfEdge(curr, defaultNode, codeBlockBuilder, edge, true)
+        );
+
+        defaultLazyCase(curr, defaultNode, codeBlockBuilder, flags);
+
+        codeBlockBuilder
+            .endControlFlow();
+    }
+
+    private static void defaultLazyCase(DFANode curr, DFANode defaultNode, Builder codeBlockBuilder,
+        Collection<RegexFlag> flags
+    ) {
+        codeBlockBuilder
+            .beginControlFlow("default: ");
+
+        if (!flags.contains(RegexFlag.LAZY) && curr.getDefaultTransition() == null) {
+            addMatchSuccess(codeBlockBuilder);
         }
+        addReturnToDefaultNode(curr, defaultNode, codeBlockBuilder, flags);
+
+        codeBlockBuilder
+            .endControlFlow();
+    }
+
+    private static void addNextStateNavigation(DFANode curr, DFANode defaultNode,
+        Builder codeBlockBuilder, Collection<RegexFlag> flags
+    ) {
 
         codeBlockBuilder
             .beginControlFlow("switch ($L)", CURR_CHAR);
 
-        curr.getTransitions().forEach(
-            edge -> {
-                codeBlockBuilder
-                    .beginControlFlow("case '$L':", formatCharacter(edge.getCharacter()));
-                if (!edge.isNegated()) {
-                    codeBlockBuilder
-                        .addStatement("$L = $L", CURR_STATE, edge.getEnd().getId());
-                } else {
-                    codeBlockBuilder
-                        .addStatement("$L = $L", CURR_STATE, defaultNode.getId());
-                }
-                codeBlockBuilder
-                    .addStatement("break")
-                    .endControlFlow();
-            }
+        curr.getTransitions().entrySet().forEach(
+            edge -> caseOfEdge(curr, defaultNode, codeBlockBuilder, edge, true)
         );
 
         codeBlockBuilder
-            .beginControlFlow("default: ")
-            .beginControlFlow("if ($L > $L)", LAST_SUCCESSFUL_MATCH_AT, MATCH_STARTED_AT);
+            .beginControlFlow("default:");
 
-        addMatchSuccess(codeBlockBuilder);
+        if (curr.getDefaultTransition() == null) {
 
-        codeBlockBuilder.endControlFlow();
+            codeBlockBuilder
+                .beginControlFlow("if ($L > $L)", LAST_SUCCESSFUL_MATCH_AT, MATCH_STARTED_AT);
 
-        addReturnToDefaultNode(curr, defaultNode, codeBlockBuilder);
+            addMatchSuccess(codeBlockBuilder);
+
+            codeBlockBuilder.endControlFlow();
+
+        }
+
+        addReturnToDefaultNode(curr, defaultNode, codeBlockBuilder, flags);
 
         codeBlockBuilder
             .addStatement("break")
@@ -460,86 +439,130 @@ public class CodeGeneratorOrchestrator {
 
     }
 
+    private static void caseOfEdge(DFANode curr, DFANode defaultNode, Builder codeBlockBuilder,
+        Entry<Character, DFANode> edge, boolean resetMatchStartedAt
+    ) {
+        if (edge.getValue() != null) {
+
+            codeBlockBuilder
+                .beginControlFlow("case '$L':", formatCharacter(edge.getKey()))
+                .addStatement("$L = $L", CURR_STATE, edge.getValue().getId())
+                .addStatement("break")
+                .endControlFlow();
+
+        } else {
+
+            codeBlockBuilder
+                .beginControlFlow("case '$L':", formatCharacter(edge.getKey()))
+                .addStatement("$L -= $L", CURR_INDEX, curr.getDistanceFromStart());
+
+            if (resetMatchStartedAt) {
+                codeBlockBuilder.addStatement("$L = $L + 1", MATCH_STARTED_AT, CURR_INDEX);
+            }
+
+            codeBlockBuilder
+                .addStatement("$L = $L", CURR_STATE, defaultNode.getId())
+                .addStatement("break")
+                .endControlFlow();
+
+        }
+    }
+
     private static void addMatchSuccess(Builder codeBlockBuilder) {
         codeBlockBuilder
             .addStatement(
                 "$L.add(new $T($L, $L))", FOUND, ParseResultMatch.class, MATCH_STARTED_AT,
                 CURR_INDEX
-            );
+            )
+            .addStatement("$L = $L + 1", MATCH_STARTED_AT, CURR_INDEX);
     }
 
     private static void addReturnToDefaultNode(DFANode curr, DFANode defaultNode,
-        Builder codeBlockBuilder
+        Builder codeBlockBuilder, Collection<RegexFlag> flags
     ) {
 
-        if (curr.getTransitions().stream().anyMatch(DFANodeEdge::isNegated)) {
+        if (flags.contains(RegexFlag.START_OF_STRING)) {
 
-            codeBlockBuilder
-                .addStatement("$L = $L",
-                    CURR_STATE,
-                    curr.getTransitions().stream()
-                        .filter(DFANodeEdge::isNegated)
-                        .findFirst().orElseThrow().getEnd().getId()
-                );
+            // If the string has to match from the start and there is match in the DFA,
+            // we move to an impossible state.
+            codeBlockBuilder.addStatement("$L = $L", CURR_STATE, -1);
 
         } else {
 
-            codeBlockBuilder
-                .addStatement("$L = $L + 1", MATCH_STARTED_AT, CURR_INDEX)
-                .addStatement("$L = $L", CURR_STATE, defaultNode.getId())
-                .addStatement("$L -= $L", CURR_INDEX, curr.getDistanceFromStart());
+            if (curr.getDefaultTransition() != null) {
+
+                codeBlockBuilder
+                    .addStatement(
+                        "$L = $L",
+                        CURR_STATE,
+                        curr.getDefaultTransition().getId()
+                    );
+
+            } else {
+
+                codeBlockBuilder
+                    .addStatement("$L -= $L", CURR_INDEX, curr.getDistanceFromStart())
+                    .addStatement("$L = $L", CURR_STATE, defaultNode.getId());
+
+            }
 
         }
 
     }
 
-    private static void addStateSwitchForMatches(DFANode startingNode, Builder codeBlockBuilder) {
+    private static void addStateSwitchForMatches(DFAParseResult parseResult,
+        Builder codeBlockBuilder
+    ) {
         // Start switch
         codeBlockBuilder
             .beginControlFlow("switch ($L)", CURR_STATE);
 
-        addDFANodeCaseForMatches(startingNode, codeBlockBuilder);
+        addDFANodeCaseForMatches(parseResult, codeBlockBuilder);
 
         // End switch
         codeBlockBuilder
             .endControlFlow();
     }
 
-    private static void addDFANodeCaseForMatches(DFANode startingNode, Builder codeBlockBuilder) {
+    private static void addDFANodeCaseForMatches(DFAParseResult parseResult,
+        Builder codeBlockBuilder
+    ) {
         Set<DFANode> done = new HashSet<>();
         Set<DFANode> queue = new HashSet<>();
-        queue.add(startingNode);
+        queue.add(parseResult.getStartingNode());
         while (!queue.isEmpty()) {
             var curr = queue.iterator().next();
             queue.remove(curr);
-            if (done.contains(curr)) {
+            if (done.contains(curr) || curr == null) {
                 continue;
             }
             done.add(curr);
 
             codeBlockBuilder.beginControlFlow("case $L:", curr.getId());
 
-            addCurrentDFANodeTransitionsForMatches(curr, startingNode, codeBlockBuilder);
+            addCurrentDFANodeTransitionsForMatches(
+                curr, parseResult.getStartingNode(), codeBlockBuilder, parseResult.getFlags());
 
             codeBlockBuilder.endControlFlow();
 
-            curr.getTransitions().forEach(
-                edge -> queue.add(edge.getEnd())
-            );
+            queue.addAll(curr.getTransitions().values());
 
         }
     }
 
-    private static void addStateSwitchForFindMatches(DFANode startingNode, Builder codeBlockBuilder,
-        boolean lazy
+    private static void addStateSwitchForFindMatches(DFAParseResult parseResult,
+        Builder codeBlockBuilder
     ) {
-        // Start switch
         codeBlockBuilder
             .beginControlFlow("switch ($L)", CURR_STATE);
 
-        addDFANodeCaseForFindMatches(startingNode, codeBlockBuilder, lazy);
+        addDFANodeCaseForFindMatches(parseResult, codeBlockBuilder);
 
-        // End switch
+        codeBlockBuilder
+            .beginControlFlow("default: ")
+            .addStatement("return new $T($L)", ParseResult.class, FOUND)
+            .endControlFlow();
+
         codeBlockBuilder
             .endControlFlow();
     }
@@ -567,8 +590,9 @@ public class CodeGeneratorOrchestrator {
             final var annotation = parsedClass.getAnnotations().stream()
                 .filter(this::isRegexParser)
                 .findFirst().orElseThrow();
-            final var regexValueStr = annotation.getNamedParameter("value").toString();
-            final boolean lazy = Boolean.parseBoolean(annotation.getNamedParameterMap().getOrDefault("lazy", true).toString());
+            final var regexValueStr = annotation.getNamedParameter("value").toString()
+                .replace("\\\\", "\\")
+                .replace("\\\"", "\"");
             final var regexValue = regexValueStr.substring(1, regexValueStr.length() - 1);
 
             classImplBuilder
@@ -591,13 +615,19 @@ public class CodeGeneratorOrchestrator {
                     .build()
             );
 
+            var parseResult = new DFAMinimizer().parseAndConvertAndMinimize(regexValue);
+            calculateDistanceFromStartAndAddParents(parseResult.getStartingNode());
+            if (parseResult.getFlags().contains(RegexFlag.CASE_INDEPENDENT_ASCII)) {
+                addAlternateEdges(parseResult.getStartingNode());
+            }
+
             var matchesMethodBuilder = MethodSpec.methodBuilder("matches")
                 .addParameter(String.class, FUNCTION_INPUT_VARIABLE_NAME)
                 .addAnnotation(Override.class)
                 .addModifiers(Modifier.PUBLIC)
                 .returns(boolean.class);
 
-            matchesMethodBuilder.addCode(matchesFunctionImplementation(regexValue));
+            matchesMethodBuilder.addCode(matchesFunctionImplementation(parseResult));
 
             var findMatchesMethodBuilder = MethodSpec.methodBuilder("findMatches")
                 .addParameter(String.class, FUNCTION_INPUT_VARIABLE_NAME)
@@ -605,7 +635,7 @@ public class CodeGeneratorOrchestrator {
                 .addModifiers(Modifier.PUBLIC)
                 .returns(ParseResult.class);
 
-            findMatchesMethodBuilder.addCode(findMatchesFunctionImplementation(regexValue, lazy));
+            findMatchesMethodBuilder.addCode(findMatchesFunctionImplementation(parseResult));
 
             classImplBuilder
                 .addMethod(matchesMethodBuilder.build())
@@ -620,14 +650,6 @@ public class CodeGeneratorOrchestrator {
             e.printStackTrace();
         }
 
-    }
-
-    public static void main(String[] args) {
-        new CodeGeneratorOrchestrator().generateParser(
-            new File(
-                "C:\\Work\\bme\\7_felev\\szakdoga\\test\\src\\main\\java\\hu\\nemaberci\\api\\TestRegexParser.java"),
-            new File("C:\\Work\\bme\\7_felev\\szakdoga\\qwe123\\")
-        );
     }
 
 }

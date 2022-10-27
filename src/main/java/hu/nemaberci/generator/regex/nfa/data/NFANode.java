@@ -24,13 +24,12 @@ public class NFANode {
     public enum NFANodeType {
         START,
         ACCEPT,
-        EMPTY,
-        NEGATED
+        EMPTY
     }
 
-    //@Override
-    //public String toString() {
-    //    return ToStringBuilder.reflectionToString(this, ToStringStyle.JSON_STYLE);
-    //}
+    @Override
+    public String toString() {
+        return Integer.toString(id);
+    }
 
 }
