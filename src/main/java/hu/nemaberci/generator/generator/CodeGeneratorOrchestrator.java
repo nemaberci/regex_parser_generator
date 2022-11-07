@@ -63,6 +63,7 @@ public class CodeGeneratorOrchestrator {
     public static final String INPUT_STRING_LENGTH = "stringLength";
     public static final String CURRENT_STATE_ARRAY = "currentStateArray";
     public static final String STATE_HANDLERS = "stateHandlers";
+    public static final String PARENT_PARSER = "parentParser";
     public static final int CURR_INDEX_POSITION = 0;
     public static final int CURR_STATE_POSITION = 1;
     public static final int MATCH_STARTED_AT_POSITION = 2;
@@ -147,6 +148,7 @@ public class CodeGeneratorOrchestrator {
                         parseResult.getFlags(),
                         parseResult.getStartingNode(),
                         partClassName,
+                        className,
                         writer
                     );
                 }

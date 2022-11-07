@@ -1,26 +1,32 @@
 package hu.nemaberci.generator.generator;
 
-import static hu.nemaberci.generator.annotationprocessor.RegularExpressionAnnotationProcessor.GENERATED_FILE_PACKAGE;
-import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.*;
-import static hu.nemaberci.generator.regex.dfa.util.DFAUtils.extractAllNodes;
+import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.CHARS;
+import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.CURRENT_STATE_ARRAY;
+import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.CURR_CHAR;
+import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.CURR_INDEX_POSITION;
+import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.CURR_STATE_POSITION;
+import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.FOUND;
+import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.FUNCTION_INPUT_VARIABLE_NAME;
+import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.IMPOSSIBLE_STATE_ID;
+import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.INPUT_STRING_LENGTH;
+import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.LAST_SUCCESSFUL_MATCH_AT_POSITION;
+import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.MATCH_STARTED_AT_POSITION;
+import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.STATES_PER_FILE;
+import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.STATE_HANDLERS;
 
-import com.ibm.icu.impl.RuleCharacterIterator.Position;
 import com.squareup.javapoet.AnnotationSpec;
 import com.squareup.javapoet.ArrayTypeName;
-import com.squareup.javapoet.ClassName;
 import com.squareup.javapoet.CodeBlock;
 import com.squareup.javapoet.CodeBlock.Builder;
 import com.squareup.javapoet.FieldSpec;
 import com.squareup.javapoet.JavaFile;
 import com.squareup.javapoet.MethodSpec;
 import com.squareup.javapoet.ParameterizedTypeName;
-import com.squareup.javapoet.TypeName;
 import com.squareup.javapoet.TypeSpec;
-import hu.nemaberci.generator.regex.data.RegexFlag;
 import hu.nemaberci.generator.regex.dfa.data.DFANode;
-import hu.nemaberci.generator.regex.dfa.data.DFAParseResult;
 import hu.nemaberci.regex.annotation.RegularExpressionParserImplementation;
 import hu.nemaberci.regex.api.RegexParser;
+import hu.nemaberci.regex.api.StateHandler;
 import hu.nemaberci.regex.data.ParseResult;
 import hu.nemaberci.regex.data.ParseResultMatch;
 import java.io.IOException;
@@ -29,8 +35,6 @@ import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 import javax.annotation.processing.Generated;
 import javax.lang.model.element.Modifier;
 
@@ -90,33 +94,42 @@ public class ParserFileGenerator {
 
     private static void addMainWhileLoopForMatches(DFANode startingNode, Builder codeBlockBuilder) {
         codeBlockBuilder
-            .beginControlFlow("while ($L[$L] < $L)", CURRENT_STATE_ARRAY, CURR_INDEX_POSITION, INPUT_STRING_LENGTH)
+            .beginControlFlow(
+                "while ($L[$L] < $L)", CURRENT_STATE_ARRAY, CURR_INDEX_POSITION,
+                INPUT_STRING_LENGTH
+            )
             .beginControlFlow(
                 "if ($L[$L] == $L)",
                 CURRENT_STATE_ARRAY, CURR_STATE_POSITION,
                 IMPOSSIBLE_STATE_ID
             )
-                .addStatement("return false")
+            .addStatement("return false")
             .endControlFlow()
-            .addStatement("final char $L = $L[$L[$L]]", CURR_CHAR, CHARS, CURRENT_STATE_ARRAY, CURR_INDEX_POSITION)
-            .addStatement("$L[$L[$L] / $L].accept($L, $L)", STATE_HANDLERS, CURRENT_STATE_ARRAY, CURR_STATE_POSITION, STATES_PER_FILE, CURR_CHAR, CURRENT_STATE_ARRAY)
+            .addStatement(
+                "final char $L = $L[$L[$L]]", CURR_CHAR, CHARS, CURRENT_STATE_ARRAY,
+                CURR_INDEX_POSITION
+            )
+            .addStatement(
+                "$L[$L[$L] / $L].handle($L, $L)", STATE_HANDLERS, CURRENT_STATE_ARRAY,
+                CURR_STATE_POSITION, STATES_PER_FILE, CURR_CHAR, CURRENT_STATE_ARRAY
+            )
             .beginControlFlow(
                 "if ($L[$L] > $L[$L])",
                 CURRENT_STATE_ARRAY, LAST_SUCCESSFUL_MATCH_AT_POSITION,
                 CURRENT_STATE_ARRAY, MATCH_STARTED_AT_POSITION
             )
-                .addStatement("return true")
+            .addStatement("return true")
             .endControlFlow()
             .beginControlFlow(
                 "if ($L[$L] == $L)",
                 CURRENT_STATE_ARRAY, CURR_STATE_POSITION,
                 startingNode.getId()
             )
-                .addStatement(
-                    "$L[$L] = $L[$L] + 1",
-                    CURRENT_STATE_ARRAY, MATCH_STARTED_AT_POSITION,
-                    CURRENT_STATE_ARRAY, CURR_INDEX_POSITION
-                )
+            .addStatement(
+                "$L[$L] = $L[$L] + 1",
+                CURRENT_STATE_ARRAY, MATCH_STARTED_AT_POSITION,
+                CURRENT_STATE_ARRAY, CURR_INDEX_POSITION
+            )
             .endControlFlow()
             .addStatement("$L[$L]++", CURRENT_STATE_ARRAY, CURR_INDEX_POSITION)
             .endControlFlow();
@@ -126,7 +139,7 @@ public class ParserFileGenerator {
         var codeBlockBuilder = CodeBlock.builder();
         initStartingVariables(startingNode, codeBlockBuilder);
         codeBlockBuilder.addStatement(
-            "final $T<$T> $L = new $T<>()", ArrayDeque.class, ParseResultMatch.class, FOUND,
+            "$L = new $T<>()", FOUND,
             ArrayDeque.class
         );
         handleEmptyInputWithParseResultOutput(codeBlockBuilder);
@@ -165,50 +178,58 @@ public class ParserFileGenerator {
         Builder codeBlockBuilder
     ) {
         codeBlockBuilder
-            .beginControlFlow("while ($L[$L] < $L)", CURRENT_STATE_ARRAY, CURR_INDEX_POSITION, INPUT_STRING_LENGTH)
             .beginControlFlow(
-                "if ($L[$L] == $L)",
-                CURRENT_STATE_ARRAY, CURR_STATE_POSITION,
-                IMPOSSIBLE_STATE_ID
+                "while ($L[$L] < $L)", CURRENT_STATE_ARRAY, CURR_INDEX_POSITION,
+                INPUT_STRING_LENGTH
             )
-                .addStatement("return new $T($L)", ParseResult.class, FOUND)
+            .beginControlFlow(
+                "if ($L[$L] < $L)",
+                CURRENT_STATE_ARRAY, CURR_STATE_POSITION,
+                0
+            )
+            .addStatement("return new $T($L)", ParseResult.class, FOUND)
             .endControlFlow()
-            .addStatement("final char $L = $L[$L[$L]]", CURR_CHAR, CHARS, CURRENT_STATE_ARRAY, CURR_INDEX_POSITION)
-            .addStatement("$L[$L[$L] / $L].accept($L, $L)", STATE_HANDLERS, CURRENT_STATE_ARRAY, CURR_STATE_POSITION, STATES_PER_FILE, CURR_CHAR, CURRENT_STATE_ARRAY)
+            .addStatement(
+                "final char $L = $L[$L[$L]]", CURR_CHAR, CHARS, CURRENT_STATE_ARRAY,
+                CURR_INDEX_POSITION
+            )
+            .addStatement(
+                "$L[$L[$L] / $L].handle($L, $L)", STATE_HANDLERS, CURRENT_STATE_ARRAY,
+                CURR_STATE_POSITION, STATES_PER_FILE, CURR_CHAR, CURRENT_STATE_ARRAY
+            )
+            .addStatement("$L[$L]++", CURRENT_STATE_ARRAY, CURR_INDEX_POSITION)
+            .endControlFlow();
+    }
+
+    private static CodeBlock addResultFunctionImplementation() {
+        return CodeBlock.builder()
             .beginControlFlow(
                 "if ($L[$L] > $L[$L])",
                 CURRENT_STATE_ARRAY, LAST_SUCCESSFUL_MATCH_AT_POSITION,
                 CURRENT_STATE_ARRAY, MATCH_STARTED_AT_POSITION
             )
-                .addStatement(
-                    "$L.add(new $T($L[$L], $L[$L]))",
-                    FOUND,
-                    ParseResultMatch.class,
-                    CURRENT_STATE_ARRAY, MATCH_STARTED_AT_POSITION,
-                    CURRENT_STATE_ARRAY, LAST_SUCCESSFUL_MATCH_AT_POSITION
-                )
-            .endControlFlow()
-            .beginControlFlow(
-                "if ($L[$L] == $L)",
-                CURRENT_STATE_ARRAY, CURR_STATE_POSITION,
-                startingNode.getId()
+            .addStatement(
+                "$L.add(new $T($L[$L], $L[$L]))",
+                FOUND,
+                ParseResultMatch.class,
+                CURRENT_STATE_ARRAY, MATCH_STARTED_AT_POSITION,
+                CURRENT_STATE_ARRAY, LAST_SUCCESSFUL_MATCH_AT_POSITION
             )
-                .addStatement(
-                    "$L[$L] = $L[$L] > $L[$L] ? $L[$L] - 1 : $L[$L]",
-                    CURRENT_STATE_ARRAY, CURR_INDEX_POSITION,
-                    CURRENT_STATE_ARRAY, LAST_SUCCESSFUL_MATCH_AT_POSITION,
-                    CURRENT_STATE_ARRAY, MATCH_STARTED_AT_POSITION,
-                    CURRENT_STATE_ARRAY, LAST_SUCCESSFUL_MATCH_AT_POSITION,
-                    CURRENT_STATE_ARRAY, MATCH_STARTED_AT_POSITION
-                )
-                .addStatement(
-                    "$L[$L] = $L[$L] + 1",
-                    CURRENT_STATE_ARRAY, MATCH_STARTED_AT_POSITION,
-                    CURRENT_STATE_ARRAY, CURR_INDEX_POSITION
-                )
             .endControlFlow()
-            .addStatement("$L[$L]++", CURRENT_STATE_ARRAY, CURR_INDEX_POSITION)
-            .endControlFlow();
+            .addStatement(
+                "$L[$L] = $L[$L] > $L[$L] ? $L[$L] - 1 : $L[$L]",
+                CURRENT_STATE_ARRAY, CURR_INDEX_POSITION,
+                CURRENT_STATE_ARRAY, LAST_SUCCESSFUL_MATCH_AT_POSITION,
+                CURRENT_STATE_ARRAY, MATCH_STARTED_AT_POSITION,
+                CURRENT_STATE_ARRAY, LAST_SUCCESSFUL_MATCH_AT_POSITION,
+                CURRENT_STATE_ARRAY, MATCH_STARTED_AT_POSITION
+            )
+            .addStatement(
+                "$L[$L] = $L[$L] + 1",
+                CURRENT_STATE_ARRAY, MATCH_STARTED_AT_POSITION,
+                CURRENT_STATE_ARRAY, CURR_INDEX_POSITION
+            )
+            .build();
     }
 
     public static void createMainParserFile(
@@ -232,22 +253,33 @@ public class ParserFileGenerator {
                 AnnotationSpec.builder(RegularExpressionParserImplementation.class)
                     .addMember("value", "$S", regex)
                     .build()
-            );
-
-        var stateHandlersType = ArrayTypeName.of(ParameterizedTypeName.get(ClassName.get(BiConsumer.class), TypeName.CHAR.box(), ArrayTypeName.of(TypeName.INT)));
-
-        classImplBuilder
+            )
             .addField(
                 FieldSpec
                     .builder(int[].class, CURRENT_STATE_ARRAY, Modifier.PRIVATE,
-                        Modifier.FINAL)
+                        Modifier.FINAL
+                    )
                     .initializer("new int[]{$L, $L, $L, $L}", 0, startingNode.getId(), 0, 0)
                     .build()
             )
             .addField(
                 FieldSpec
-                    .builder(stateHandlersType, STATE_HANDLERS, Modifier.FINAL, Modifier.PRIVATE)
-                    .initializer("new $T[$L]", BiConsumer.class, (dfaNodes.size() + STATES_PER_FILE - 1) / STATES_PER_FILE)
+                    .builder(
+                        ArrayTypeName.of(StateHandler.class), STATE_HANDLERS, Modifier.FINAL,
+                        Modifier.PRIVATE
+                    )
+                    .initializer(
+                        "new $T[$L]", StateHandler.class,
+                        (dfaNodes.size() + STATES_PER_FILE - 1) / STATES_PER_FILE
+                    )
+                    .build()
+            )
+            .addField(
+                FieldSpec
+                    .builder(
+                        ParameterizedTypeName.get(ArrayDeque.class, ParseResultMatch.class), FOUND, Modifier.PRIVATE
+                    )
+
                     .build()
             );
 
@@ -256,7 +288,7 @@ public class ParserFileGenerator {
         for (int i = 0; i < (dfaNodes.size() + STATES_PER_FILE - 1) / STATES_PER_FILE; i++) {
 
             constructorBuilder.addStatement(
-                "$L[$L] = new $L()",
+                "$L[$L] = new $L(this)",
                 STATE_HANDLERS,
                 i,
                 className + "_part_" + i
@@ -275,21 +307,26 @@ public class ParserFileGenerator {
             .addParameter(String.class, FUNCTION_INPUT_VARIABLE_NAME)
             .addAnnotation(Override.class)
             .addModifiers(Modifier.PUBLIC)
-            .returns(boolean.class);
-
-        matchesMethodBuilder.addCode(matchesFunctionImplementation(startingNode));
+            .returns(boolean.class)
+            .addCode(matchesFunctionImplementation(startingNode));
 
         var findMatchesMethodBuilder = MethodSpec.methodBuilder("findMatches")
             .addParameter(String.class, FUNCTION_INPUT_VARIABLE_NAME)
             .addAnnotation(Override.class)
             .addModifiers(Modifier.PUBLIC)
-            .returns(ParseResult.class);
+            .returns(ParseResult.class)
+            .addCode(findMatchesFunctionImplementation(startingNode));
 
-        findMatchesMethodBuilder.addCode(findMatchesFunctionImplementation(startingNode));
+        var addResultMethodBuilder = MethodSpec.methodBuilder("addResult")
+            .addParameter(int[].class, CURRENT_STATE_ARRAY)
+            .addModifiers(Modifier.PUBLIC)
+            .addCode(addResultFunctionImplementation())
+            .returns(void.class);
 
         classImplBuilder
             .addMethod(matchesMethodBuilder.build())
-            .addMethod(findMatchesMethodBuilder.build());
+            .addMethod(findMatchesMethodBuilder.build())
+            .addMethod(addResultMethodBuilder.build());
 
         var javaFileBuilder = JavaFile.builder(
             "hu.nemaberci.regex.generated",
