@@ -220,7 +220,7 @@ public class DFAMinimizer {
 
         }
 
-        int newId = 1;
+        int newId = 0;
         List<DFANode> createdNodes = new ArrayList<>();
         for (var ignored : partitions) {
             createdNodes.add(new DFANode().setId(newId++));

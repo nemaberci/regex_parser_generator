@@ -15,7 +15,7 @@ import org.apache.commons.lang3.ArrayUtils;
 
 public class RegexToNFAParser {
 
-    public static final char EPSILON = 0x03B5;
+    public static final char EPSILON = 0x0000;
 
     private int id = 0;
 
@@ -27,8 +27,6 @@ public class RegexToNFAParser {
         return Set.of(c);
     }
 
-    // todo list:
-    // 2. Lazy or eager switches
     private void generateNFAGraph(RegexNode regexNode, NFANode startNode, NFANode endNode) {
         switch (regexNode.getType()) {
             case EMPTY: {

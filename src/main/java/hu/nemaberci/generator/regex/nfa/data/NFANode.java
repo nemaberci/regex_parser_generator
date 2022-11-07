@@ -7,8 +7,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.Accessors;
-import org.apache.commons.lang3.builder.ToStringBuilder;
-import org.apache.commons.lang3.builder.ToStringStyle;
 
 @Setter
 @Getter
@@ -19,7 +17,7 @@ public class NFANode {
 
     private final List<NFANodeEdge> edges = new ArrayList<>();
     private NFANodeType type = NFANodeType.EMPTY;
-    private int id = -1;
+    private int id = -1; //
 
     public enum NFANodeType {
         START,
