@@ -25,7 +25,6 @@ import com.squareup.javapoet.ParameterizedTypeName;
 import com.squareup.javapoet.TypeSpec;
 import hu.nemaberci.generator.regex.dfa.data.DFANode;
 import hu.nemaberci.regex.annotation.RegularExpressionParserImplementation;
-import hu.nemaberci.regex.api.AbstractParserPart;
 import hu.nemaberci.regex.api.RegexParser;
 import hu.nemaberci.regex.data.ParseResult;
 import hu.nemaberci.regex.data.ParseResultMatch;
@@ -65,18 +64,20 @@ public class ParserFileGenerator {
             .addStatement(
                 "$L = $L",
                 CURR_STATE_HANDLER,
-                getPartVariableName(startingNode.getId() / (1 << STATES_PER_FILE_LOG_2))
+                startingNode.getId() / (1 << STATES_PER_FILE_LOG_2)
             )
             .addStatement("$L = $L.toCharArray()", CHARS, FUNCTION_INPUT_VARIABLE_NAME)
             .addStatement(
                 "final int $L = $L.length()", INPUT_STRING_LENGTH, FUNCTION_INPUT_VARIABLE_NAME);
     }
 
-    private static CodeBlock matchesFunctionImplementation(DFANode startingNode) {
+    private static CodeBlock matchesFunctionImplementation(DFANode startingNode,
+        Collection<DFANode> dfaNodes
+    ) {
         var codeBlockBuilder = CodeBlock.builder();
         initStartingVariables(startingNode, codeBlockBuilder);
         handleEmptyInputWithBooleanOutput(codeBlockBuilder);
-        addMainWhileLoopForMatches(startingNode, codeBlockBuilder);
+        addMainWhileLoopForMatches(startingNode, dfaNodes, codeBlockBuilder);
         checkIfStateIsAcceptingAndReturnBoolean(codeBlockBuilder);
         return codeBlockBuilder.build();
     }
@@ -101,7 +102,9 @@ public class ParserFileGenerator {
             .addStatement("return false");
     }
 
-    private static void addMainWhileLoopForMatches(DFANode startingNode, Builder codeBlockBuilder) {
+    private static void addMainWhileLoopForMatches(DFANode startingNode,
+        Collection<DFANode> dfaNodes, Builder codeBlockBuilder
+    ) {
         codeBlockBuilder
             .beginControlFlow(
                 "while ($L < $L)", CURR_INDEX,
@@ -117,9 +120,22 @@ public class ParserFileGenerator {
             .addStatement(
                 "$L = $L[$L]", CURR_CHAR, CHARS, CURR_INDEX
             )
-            .addStatement(
-                "$L.run()", CURR_STATE_HANDLER
-            )
+            .beginControlFlow("switch ($L)", CURR_STATE_HANDLER);
+
+        for (int i = 0; i <= dfaNodes.size() >> STATES_PER_FILE_LOG_2; i++) {
+
+            codeBlockBuilder
+                .beginControlFlow("case $L:", i)
+                .addStatement(
+                    "$L.run()", getPartVariableName(i)
+                )
+                .addStatement("break")
+                .endControlFlow();
+
+        }
+
+        codeBlockBuilder
+            .endControlFlow()
             .beginControlFlow(
                 "if ($L > $L)",
                 LAST_SUCCESSFUL_MATCH_AT,
@@ -142,7 +158,9 @@ public class ParserFileGenerator {
             .endControlFlow();
     }
 
-    private static CodeBlock findMatchesFunctionImplementation(DFANode startingNode) {
+    private static CodeBlock findMatchesFunctionImplementation(DFANode startingNode,
+        Collection<DFANode> dfaNodes
+    ) {
         var codeBlockBuilder = CodeBlock.builder();
         initStartingVariables(startingNode, codeBlockBuilder);
         codeBlockBuilder.addStatement(
@@ -150,7 +168,7 @@ public class ParserFileGenerator {
             ArrayDeque.class
         );
         handleEmptyInputWithParseResultOutput(codeBlockBuilder);
-        addMainWhileLoopForFindMatches(codeBlockBuilder);
+        addMainWhileLoopForFindMatches(codeBlockBuilder, dfaNodes);
         checkIfStateIsAcceptingAndReturnParseResult(codeBlockBuilder);
         return codeBlockBuilder.build();
     }
@@ -182,7 +200,7 @@ public class ParserFileGenerator {
     }
 
     private static void addMainWhileLoopForFindMatches(
-        Builder codeBlockBuilder
+        Builder codeBlockBuilder, Collection<DFANode> dfaNodes
     ) {
         codeBlockBuilder
             .beginControlFlow(
@@ -199,9 +217,22 @@ public class ParserFileGenerator {
             .addStatement(
                 "$L = $L[$L]", CURR_CHAR, CHARS, CURR_INDEX
             )
-            .addStatement(
-                "$L.run()", CURR_STATE_HANDLER
-            )
+            .beginControlFlow("switch ($L)", CURR_STATE_HANDLER);
+
+        for (int i = 0; i <= dfaNodes.size() >> STATES_PER_FILE_LOG_2; i++) {
+
+            codeBlockBuilder
+                .beginControlFlow("case $L:", i)
+                .addStatement(
+                    "$L.run()", getPartVariableName(i)
+                )
+                .addStatement("break")
+                .endControlFlow();
+
+        }
+
+        codeBlockBuilder
+            .endControlFlow()
             .addStatement("$L++", CURR_INDEX)
             .endControlFlow();
     }
@@ -286,7 +317,16 @@ public class ParserFileGenerator {
                 FieldSpec.builder(int.class, CURR_STATE, Modifier.PUBLIC).build()
             )
             .addField(
-                FieldSpec.builder(AbstractParserPart.class, CURR_STATE_HANDLER, Modifier.PUBLIC)
+                FieldSpec.builder(int.class, CURR_STATE_HANDLER, Modifier.PUBLIC)
+                    .build()
+            )
+            .addField(
+                FieldSpec.builder(
+                        ClassName.get("hu.nemaberci.regex.generated", className + "_util"), "util")
+                    .initializer(
+                        "new $T(this)",
+                        ClassName.get("hu.nemaberci.regex.generated", className + "_util")
+                    )
                     .build()
             );
 
@@ -327,14 +367,14 @@ public class ParserFileGenerator {
             .addAnnotation(Override.class)
             .addModifiers(Modifier.PUBLIC)
             .returns(boolean.class)
-            .addCode(matchesFunctionImplementation(startingNode));
+            .addCode(matchesFunctionImplementation(startingNode, dfaNodes));
 
         var findMatchesMethodBuilder = MethodSpec.methodBuilder("findMatches")
             .addParameter(String.class, FUNCTION_INPUT_VARIABLE_NAME)
             .addAnnotation(Override.class)
             .addModifiers(Modifier.PUBLIC)
             .returns(ParseResult.class)
-            .addCode(findMatchesFunctionImplementation(startingNode));
+            .addCode(findMatchesFunctionImplementation(startingNode, dfaNodes));
 
         var addResultMethodBuilder = MethodSpec.methodBuilder("addResult")
             .addModifiers(Modifier.PUBLIC)

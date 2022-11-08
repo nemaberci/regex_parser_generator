@@ -1,7 +1,9 @@
 package hu.nemaberci.generator.generator;
 
 import static hu.nemaberci.generator.annotationprocessor.RegularExpressionAnnotationProcessor.GENERATED_FILE_PACKAGE;
+import static hu.nemaberci.generator.generator.IndividualStateHandlerGenerator.createIndividualStateHandler;
 import static hu.nemaberci.generator.generator.ParserFileGenerator.createMainParserFile;
+import static hu.nemaberci.generator.generator.StateTransitionHandlerGenerator.createStateTransitionHandlerUtil;
 import static hu.nemaberci.generator.generator.StatesHandlerGenerator.createFileForStates;
 import static hu.nemaberci.generator.regex.dfa.util.DFAUtils.extractAllNodes;
 
@@ -32,6 +34,7 @@ public class CodeGeneratorOrchestrator {
     public static final String CURR_STATE_HANDLER = "currentStateHandler";
     public static final String INPUT_STRING_LENGTH = "stringLength";
     public static final String PARENT_PARSER = "parentParser";
+    public static final String UTIL = "util";
     public static final int IMPOSSIBLE_STATE_ID = -1;
     public static final int STATES_PER_FILE_LOG_2 = 4;
 
@@ -92,6 +95,22 @@ public class CodeGeneratorOrchestrator {
         return originalClassName + "_part_" + i;
     }
 
+    public static String individualStateHandlerName(String originalClassName, int i) {
+        return originalClassName + "_state_" + i;
+    }
+
+    public static String nameOfFunctionThatLeadsToState(int stateId) {
+        return "jumpToState" + stateId;
+    }
+
+    public static String nameOfFunctionThatRestartsSearch() {
+        return "restartSearch";
+    }
+
+    public static String nameOfFunctionThatAddsResultFound() {
+        return "resultFound";
+    }
+
     public String generateParser(String className, String regex, Filer filer) {
 
         try {
@@ -110,16 +129,45 @@ public class CodeGeneratorOrchestrator {
             for (int i = 0; i < splitNodes.size(); i++) {
                 List<DFANode> split = splitNodes.get(i);
                 final var partClassName = stateHandlerPartName(className, i);
-                try (var writer = filer.createSourceFile(GENERATED_FILE_PACKAGE + "." + partClassName).openWriter()) {
+                try (var writer = filer.createSourceFile(
+                    GENERATED_FILE_PACKAGE + "." + partClassName).openWriter()) {
                     createFileForStates(
-                        split,
+                        partClassName,
+                        className,
+                        writer,
+                        i * (1 << STATES_PER_FILE_LOG_2),
+                        Math.min(
+                            i * (1 << STATES_PER_FILE_LOG_2) + (1 << STATES_PER_FILE_LOG_2) - 1,
+                            allNodes.size() - 1
+                        )
+                    );
+                }
+            }
+
+            for (int i = 0; i < allNodes.size(); i++) {
+                var name = individualStateHandlerName(className, i);
+                try (var writer = filer.createSourceFile(GENERATED_FILE_PACKAGE + "." + name)
+                    .openWriter()) {
+                    createIndividualStateHandler(
+                        allNodes.get(i),
                         parseResult.getFlags(),
                         parseResult.getStartingNode(),
-                        partClassName,
+                        name,
                         className,
                         writer
                     );
                 }
+            }
+
+            try (var writer = filer.createSourceFile(
+                GENERATED_FILE_PACKAGE + "." + className + "_util").openWriter()) {
+                createStateTransitionHandlerUtil(
+                    allNodes.size(),
+                    writer,
+                    parseResult.getStartingNode(),
+                    className + "_util",
+                    className
+                );
             }
 
             createMainParserFile(
