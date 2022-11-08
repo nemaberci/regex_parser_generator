@@ -1,12 +1,14 @@
 package hu.nemaberci.generator.generator;
 
-import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.CURRENT_STATE_ARRAY;
 import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.CURR_CHAR;
-import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.CURR_INDEX_POSITION;
-import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.CURR_STATE_POSITION;
+import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.CURR_INDEX;
+import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.CURR_STATE;
+import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.CURR_STATE_HANDLER;
 import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.IMPOSSIBLE_STATE_ID;
-import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.LAST_SUCCESSFUL_MATCH_AT_POSITION;
+import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.LAST_SUCCESSFUL_MATCH_AT;
 import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.PARENT_PARSER;
+import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.STATES_PER_FILE_LOG_2;
+import static hu.nemaberci.generator.generator.ParserFileGenerator.getPartVariableName;
 
 import com.squareup.javapoet.AnnotationSpec;
 import com.squareup.javapoet.ClassName;
@@ -18,7 +20,7 @@ import com.squareup.javapoet.MethodSpec;
 import com.squareup.javapoet.TypeSpec;
 import hu.nemaberci.generator.regex.data.RegexFlag;
 import hu.nemaberci.generator.regex.dfa.data.DFANode;
-import hu.nemaberci.regex.api.StateHandler;
+import hu.nemaberci.regex.api.AbstractParserPart;
 import java.io.IOException;
 import java.io.Writer;
 import java.time.Instant;
@@ -47,17 +49,19 @@ public class StatesHandlerGenerator {
         if (curr.isAccepting()) {
             codeBlockBuilder
                 .addStatement(
-                    "$L[$L] = $L[$L]",
-                    CURRENT_STATE_ARRAY, LAST_SUCCESSFUL_MATCH_AT_POSITION,
-                    CURRENT_STATE_ARRAY, CURR_INDEX_POSITION
+                    "$L.$L = $L.$L",
+                    PARENT_PARSER, LAST_SUCCESSFUL_MATCH_AT,
+                    PARENT_PARSER, CURR_INDEX
                 );
             if (curr.getTransitions().isEmpty()) {
                 codeBlockBuilder
-                    .addStatement("$L[$L] = $L",
-                        CURRENT_STATE_ARRAY, CURR_STATE_POSITION,
+                    .addStatement("$L.$L = $L",
+                        PARENT_PARSER, CURR_STATE,
                         defaultNode.getId()
-                    )
-                    .addStatement("$L.addResult($L)", PARENT_PARSER, CURRENT_STATE_ARRAY);
+                    );
+                switchCurrStateHandlerOfParentParser(curr, defaultNode, codeBlockBuilder);
+                codeBlockBuilder
+                    .addStatement("$L.addResult()", PARENT_PARSER);
             } else {
                 lazyCharSwitch(curr, defaultNode, codeBlockBuilder, flags);
             }
@@ -68,11 +72,20 @@ public class StatesHandlerGenerator {
         codeBlockBuilder.addStatement("break");
     }
 
+    private static void switchCurrStateHandlerOfParentParser(DFANode curr, DFANode nodeToSwitchTo, Builder codeBlockBuilder) {
+        if (nodeToSwitchTo.getId() / (1 << STATES_PER_FILE_LOG_2) != curr.getId() / (1 << STATES_PER_FILE_LOG_2)) {
+            codeBlockBuilder
+                .addStatement("$L.$L = $L.$L", PARENT_PARSER, CURR_STATE_HANDLER,
+                    PARENT_PARSER, getPartVariableName(nodeToSwitchTo.getId() / (1 << STATES_PER_FILE_LOG_2))
+                );
+        }
+    }
+
     private static void lazyCharSwitch(DFANode curr, DFANode defaultNode, Builder codeBlockBuilder,
         Collection<RegexFlag> flags
     ) {
         codeBlockBuilder
-            .beginControlFlow("switch ($L)", CURR_CHAR);
+            .beginControlFlow("switch ($L.$L)", PARENT_PARSER, CURR_CHAR);
 
         curr.getTransitions().entrySet().stream().sorted(Entry.comparingByKey()).forEach(
             edge -> caseOfEdge(curr, defaultNode, codeBlockBuilder, edge)
@@ -101,7 +114,7 @@ public class StatesHandlerGenerator {
     ) {
 
         codeBlockBuilder
-            .beginControlFlow("switch ($L)", CURR_CHAR);
+            .beginControlFlow("switch ($L.$L)", PARENT_PARSER, CURR_CHAR);
 
         curr.getTransitions().entrySet().stream().sorted(Entry.comparingByKey()).forEach(
             edge -> caseOfEdge(curr, defaultNode, codeBlockBuilder, edge)
@@ -129,10 +142,12 @@ public class StatesHandlerGenerator {
             codeBlockBuilder
                 .beginControlFlow("case '$L':", formatCharacter(edge.getKey()))
                 .addStatement(
-                    "$L[$L] = $L",
-                    CURRENT_STATE_ARRAY, CURR_STATE_POSITION,
+                    "$L.$L = $L",
+                    PARENT_PARSER, CURR_STATE,
                     edge.getValue().getId()
-                )
+                );
+            switchCurrStateHandlerOfParentParser(curr, edge.getValue(), codeBlockBuilder);
+            codeBlockBuilder
                 .addStatement("break")
                 .endControlFlow();
 
@@ -141,11 +156,13 @@ public class StatesHandlerGenerator {
             codeBlockBuilder
                 .beginControlFlow("case '$L':", formatCharacter(edge.getKey()))
                 .addStatement(
-                    "$L[$L] = $L",
-                    CURRENT_STATE_ARRAY, CURR_STATE_POSITION,
+                    "$L.$L = $L",
+                    PARENT_PARSER, CURR_STATE,
                     defaultNode.getId()
-                )
-                .addStatement("$L.addResult($L)", PARENT_PARSER, CURRENT_STATE_ARRAY)
+                );
+            switchCurrStateHandlerOfParentParser(curr, defaultNode, codeBlockBuilder);
+            codeBlockBuilder
+                .addStatement("$L.addResult()", PARENT_PARSER)
                 .addStatement("break")
                 .endControlFlow();
 
@@ -160,8 +177,8 @@ public class StatesHandlerGenerator {
 
             // If the string has to match from the start and there is match in the DFA,
             // we move to an impossible state.
-            codeBlockBuilder.addStatement("$L[$L] = $L",
-                CURRENT_STATE_ARRAY, CURR_STATE_POSITION,
+            codeBlockBuilder.addStatement("$L.$L = $L",
+                PARENT_PARSER, CURR_STATE,
                 IMPOSSIBLE_STATE_ID
             );
 
@@ -171,19 +188,22 @@ public class StatesHandlerGenerator {
 
                 codeBlockBuilder
                     .addStatement(
-                        "$L[$L] = $L",
-                        CURRENT_STATE_ARRAY, CURR_STATE_POSITION,
+                        "$L.$L = $L",
+                        PARENT_PARSER, CURR_STATE,
                         curr.getDefaultTransition().getId()
                     );
+                switchCurrStateHandlerOfParentParser(curr, curr.getDefaultTransition(), codeBlockBuilder);
 
             } else {
 
                 codeBlockBuilder
-                    .addStatement("$L[$L] = $L",
-                        CURRENT_STATE_ARRAY, CURR_STATE_POSITION,
+                    .addStatement("$L.$L = $L",
+                        PARENT_PARSER, CURR_STATE,
                         defaultNode.getId()
-                    )
-                    .addStatement("$L.addResult($L)", PARENT_PARSER, CURRENT_STATE_ARRAY);
+                    );
+                switchCurrStateHandlerOfParentParser(curr, defaultNode, codeBlockBuilder);
+                codeBlockBuilder
+                    .addStatement("$L.addResult()", PARENT_PARSER);
 
             }
 
@@ -196,7 +216,7 @@ public class StatesHandlerGenerator {
     ) {
 
         codeBlockBuilder
-            .beginControlFlow("switch ($L[$L])", CURRENT_STATE_ARRAY, CURR_STATE_POSITION);
+            .beginControlFlow("switch ($L.$L)", PARENT_PARSER, CURR_STATE);
 
         for (var node : dfaNodes) {
 
@@ -230,17 +250,18 @@ public class StatesHandlerGenerator {
                     .addMember("date", "$S", Instant.now().toString())
                     .build()
             )
-            .addSuperinterface(StateHandler.class)
+            .superclass(AbstractParserPart.class)
             .addField(
                 FieldSpec.builder(
-                        ClassName.get("hu.nemaberci.regex.generated", parentClassName),
-                        PARENT_PARSER,
-                        Modifier.PRIVATE
-                    ).build()
+                    ClassName.get("hu.nemaberci.regex.generated", parentClassName),
+                    PARENT_PARSER,
+                    Modifier.PRIVATE
+                ).build()
             )
             .addMethod(
                 MethodSpec.constructorBuilder()
-                    .addParameter(ClassName.get("hu.nemaberci.regex.generated", parentClassName), "parent")
+                    .addParameter(
+                        ClassName.get("hu.nemaberci.regex.generated", parentClassName), "parent")
                     .addCode("$L = $L;", PARENT_PARSER, "parent")
                     .addModifiers(Modifier.PUBLIC)
                     .build()
@@ -250,10 +271,8 @@ public class StatesHandlerGenerator {
         handleStates(codeBlockBuilder, dfaNodes, flags, startingNode);
 
         classImplBuilder.addMethod(
-            MethodSpec.methodBuilder("handle")
+            MethodSpec.methodBuilder("run")
                 .returns(void.class)
-                .addParameter(char.class, CURR_CHAR)
-                .addParameter(int[].class, CURRENT_STATE_ARRAY)
                 .addCode(codeBlockBuilder.build())
                 .addAnnotation(Override.class)
                 .addModifiers(Modifier.PUBLIC)
