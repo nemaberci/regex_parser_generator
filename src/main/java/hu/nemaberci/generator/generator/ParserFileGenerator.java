@@ -1,5 +1,6 @@
 package hu.nemaberci.generator.generator;
 
+import static hu.nemaberci.generator.annotationprocessor.RegularExpressionAnnotationProcessor.GENERATED_FILE_PACKAGE;
 import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.CHARS;
 import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.CURR_CHAR;
 import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.CURR_INDEX;
@@ -72,12 +73,12 @@ public class ParserFileGenerator {
     }
 
     private static CodeBlock matchesFunctionImplementation(DFANode startingNode,
-        Collection<DFANode> dfaNodes
+        Collection<DFANode> dfaNodes, String className
     ) {
         var codeBlockBuilder = CodeBlock.builder();
         initStartingVariables(startingNode, codeBlockBuilder);
         handleEmptyInputWithBooleanOutput(codeBlockBuilder);
-        addMainWhileLoopForMatches(startingNode, dfaNodes, codeBlockBuilder);
+        addMainWhileLoopForMatches(startingNode, dfaNodes, codeBlockBuilder, className);
         checkIfStateIsAcceptingAndReturnBoolean(codeBlockBuilder);
         return codeBlockBuilder.build();
     }
@@ -103,7 +104,7 @@ public class ParserFileGenerator {
     }
 
     private static void addMainWhileLoopForMatches(DFANode startingNode,
-        Collection<DFANode> dfaNodes, Builder codeBlockBuilder
+        Collection<DFANode> dfaNodes, Builder codeBlockBuilder, String className
     ) {
         codeBlockBuilder
             .beginControlFlow(
@@ -127,7 +128,7 @@ public class ParserFileGenerator {
             codeBlockBuilder
                 .beginControlFlow("case $L:", i)
                 .addStatement(
-                    "$L.run()", getPartVariableName(i)
+                    "$L.run()", stateHandlerPartName(className, i)
                 )
                 .addStatement("break")
                 .endControlFlow();
@@ -159,7 +160,7 @@ public class ParserFileGenerator {
     }
 
     private static CodeBlock findMatchesFunctionImplementation(DFANode startingNode,
-        Collection<DFANode> dfaNodes
+        Collection<DFANode> dfaNodes, String className
     ) {
         var codeBlockBuilder = CodeBlock.builder();
         initStartingVariables(startingNode, codeBlockBuilder);
@@ -168,7 +169,7 @@ public class ParserFileGenerator {
             ArrayDeque.class
         );
         handleEmptyInputWithParseResultOutput(codeBlockBuilder);
-        addMainWhileLoopForFindMatches(codeBlockBuilder, dfaNodes);
+        addMainWhileLoopForFindMatches(codeBlockBuilder, dfaNodes, className);
         checkIfStateIsAcceptingAndReturnParseResult(codeBlockBuilder);
         return codeBlockBuilder.build();
     }
@@ -200,7 +201,7 @@ public class ParserFileGenerator {
     }
 
     private static void addMainWhileLoopForFindMatches(
-        Builder codeBlockBuilder, Collection<DFANode> dfaNodes
+        Builder codeBlockBuilder, Collection<DFANode> dfaNodes, String className
     ) {
         codeBlockBuilder
             .beginControlFlow(
@@ -224,7 +225,7 @@ public class ParserFileGenerator {
             codeBlockBuilder
                 .beginControlFlow("case $L:", i)
                 .addStatement(
-                    "$L.run()", getPartVariableName(i)
+                    "$L.run()", stateHandlerPartName(className, i)
                 )
                 .addStatement("break")
                 .endControlFlow();
@@ -294,100 +295,75 @@ public class ParserFileGenerator {
                 FieldSpec
                     .builder(
                         ParameterizedTypeName.get(ArrayDeque.class, ParseResultMatch.class), FOUND,
-                        Modifier.PRIVATE
+                        Modifier.PRIVATE, Modifier.STATIC
                     )
                     .build()
             )
             .addField(
-                FieldSpec.builder(char[].class, CHARS, Modifier.PUBLIC).build()
+                FieldSpec.builder(char[].class, CHARS, Modifier.PUBLIC, Modifier.STATIC).build()
             )
             .addField(
-                FieldSpec.builder(char.class, CURR_CHAR, Modifier.PUBLIC).build()
+                FieldSpec.builder(char.class, CURR_CHAR, Modifier.PUBLIC, Modifier.STATIC).build()
             )
             .addField(
-                FieldSpec.builder(int.class, CURR_INDEX, Modifier.PUBLIC).build()
+                FieldSpec.builder(int.class, CURR_INDEX, Modifier.PUBLIC, Modifier.STATIC).build()
             )
             .addField(
-                FieldSpec.builder(int.class, MATCH_STARTED_AT, Modifier.PUBLIC).build()
+                FieldSpec.builder(int.class, MATCH_STARTED_AT, Modifier.PUBLIC, Modifier.STATIC).build()
             )
             .addField(
-                FieldSpec.builder(int.class, LAST_SUCCESSFUL_MATCH_AT, Modifier.PUBLIC).build()
+                FieldSpec.builder(int.class, LAST_SUCCESSFUL_MATCH_AT, Modifier.PUBLIC, Modifier.STATIC).build()
             )
             .addField(
-                FieldSpec.builder(int.class, CURR_STATE, Modifier.PUBLIC).build()
+                FieldSpec.builder(int.class, CURR_STATE, Modifier.PUBLIC, Modifier.STATIC).build()
             )
             .addField(
-                FieldSpec.builder(int.class, CURR_STATE_HANDLER, Modifier.PUBLIC)
-                    .build()
-            )
-            .addField(
-                FieldSpec.builder(
-                        ClassName.get("hu.nemaberci.regex.generated", className + "_util"), "util")
-                    .initializer(
-                        "new $T(this)",
-                        ClassName.get("hu.nemaberci.regex.generated", className + "_util")
-                    )
+                FieldSpec.builder(int.class, CURR_STATE_HANDLER, Modifier.PUBLIC, Modifier.STATIC)
                     .build()
             );
 
-        var constructorBuilder = CodeBlock.builder();
-
-        for (int i = 0;
-            i < (dfaNodes.size() + (1 << STATES_PER_FILE_LOG_2) - 1) / (1 << STATES_PER_FILE_LOG_2);
-            i++) {
-
-            classImplBuilder.addField(
-                FieldSpec.builder(
-                        ClassName.get(
-                            "hu.nemaberci.regex.generated", stateHandlerPartName(className, i)),
-                        getPartVariableName(i),
-                        Modifier.PUBLIC,
-                        Modifier.FINAL
-                    )
-                    .build()
-            );
-
-            constructorBuilder.addStatement(
-                "$L = new $L(this)",
-                getPartVariableName(i),
-                stateHandlerPartName(className, i)
-            );
-
-        }
-
-        classImplBuilder.addMethod(
-            MethodSpec.constructorBuilder()
-                .addCode(constructorBuilder.build())
-                .addModifiers(Modifier.PUBLIC)
-                .build()
-        );
-
-        var matchesMethodBuilder = MethodSpec.methodBuilder("matches")
+        var matchesMethodBuilder = MethodSpec.methodBuilder("staticMatches")
             .addParameter(String.class, FUNCTION_INPUT_VARIABLE_NAME)
-            .addAnnotation(Override.class)
-            .addModifiers(Modifier.PUBLIC)
+            .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
             .returns(boolean.class)
-            .addCode(matchesFunctionImplementation(startingNode, dfaNodes));
+            .addCode(matchesFunctionImplementation(startingNode, dfaNodes, className));
 
-        var findMatchesMethodBuilder = MethodSpec.methodBuilder("findMatches")
+        var findMatchesMethodBuilder = MethodSpec.methodBuilder("staticFindMatches")
             .addParameter(String.class, FUNCTION_INPUT_VARIABLE_NAME)
-            .addAnnotation(Override.class)
-            .addModifiers(Modifier.PUBLIC)
+            .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
             .returns(ParseResult.class)
-            .addCode(findMatchesFunctionImplementation(startingNode, dfaNodes));
+            .addCode(findMatchesFunctionImplementation(startingNode, dfaNodes, className));
 
         var addResultMethodBuilder = MethodSpec.methodBuilder("addResult")
-            .addModifiers(Modifier.PUBLIC)
+            .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
             .addCode(addResultFunctionImplementation())
             .returns(void.class);
 
         classImplBuilder
             .addMethod(matchesMethodBuilder.build())
             .addMethod(findMatchesMethodBuilder.build())
-            .addMethod(addResultMethodBuilder.build());
+            .addMethod(addResultMethodBuilder.build())
+            .addMethod(
+                MethodSpec.methodBuilder("matches")
+                    .addParameter(String.class, FUNCTION_INPUT_VARIABLE_NAME)
+                    .addAnnotation(Override.class)
+                    .addModifiers(Modifier.PUBLIC)
+                    .returns(boolean.class)
+                    .addCode("return $L.staticMatches($L);", className, FUNCTION_INPUT_VARIABLE_NAME)
+                    .build()
+            )
+            .addMethod(
+                MethodSpec.methodBuilder("findMatches")
+                    .addParameter(String.class, FUNCTION_INPUT_VARIABLE_NAME)
+                    .addAnnotation(Override.class)
+                    .addModifiers(Modifier.PUBLIC)
+                    .returns(ParseResult.class)
+                    .addCode("return $L.staticFindMatches($L);", className, FUNCTION_INPUT_VARIABLE_NAME)
+                    .build()
+            );
 
         var javaFileBuilder = JavaFile.builder(
-            "hu.nemaberci.regex.generated",
+            GENERATED_FILE_PACKAGE,
             classImplBuilder.build()
         );
         try {
@@ -397,10 +373,6 @@ public class ParserFileGenerator {
             throw new RuntimeException(e);
         }
 
-    }
-
-    public static String getPartVariableName(int i) {
-        return "part_" + i;
     }
 
 }

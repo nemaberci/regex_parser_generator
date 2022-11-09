@@ -33,7 +33,6 @@ public class CodeGeneratorOrchestrator {
     public static final String LAST_SUCCESSFUL_MATCH_AT = "lastSuccessfulMatchAt";
     public static final String CURR_STATE_HANDLER = "currentStateHandler";
     public static final String INPUT_STRING_LENGTH = "stringLength";
-    public static final String PARENT_PARSER = "parentParser";
     public static final String UTIL = "util";
     public static final int IMPOSSIBLE_STATE_ID = -1;
     public static final int STATES_PER_FILE_LOG_2 = 4;
@@ -99,6 +98,10 @@ public class CodeGeneratorOrchestrator {
         return originalClassName + "_state_" + i;
     }
 
+    public static String utilName(String originalClassName) {
+        return originalClassName + "_util";
+    }
+
     public static String nameOfFunctionThatLeadsToState(int stateId) {
         return "jumpToState" + stateId;
     }
@@ -160,12 +163,12 @@ public class CodeGeneratorOrchestrator {
             }
 
             try (var writer = filer.createSourceFile(
-                GENERATED_FILE_PACKAGE + "." + className + "_util").openWriter()) {
+                GENERATED_FILE_PACKAGE + "." + utilName(className)).openWriter()) {
                 createStateTransitionHandlerUtil(
                     allNodes.size(),
                     writer,
                     parseResult.getStartingNode(),
-                    className + "_util",
+                    utilName(className),
                     className
                 );
             }
