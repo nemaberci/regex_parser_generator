@@ -24,6 +24,7 @@ import com.squareup.javapoet.JavaFile;
 import com.squareup.javapoet.MethodSpec;
 import com.squareup.javapoet.ParameterizedTypeName;
 import com.squareup.javapoet.TypeSpec;
+import hu.nemaberci.generator.regex.data.RegexFlag;
 import hu.nemaberci.generator.regex.dfa.data.DFANode;
 import hu.nemaberci.regex.annotation.RegularExpressionParserImplementation;
 import hu.nemaberci.regex.api.RegexParser;
@@ -31,6 +32,7 @@ import hu.nemaberci.regex.data.ParseResult;
 import hu.nemaberci.regex.data.ParseResultMatch;
 import java.io.IOException;
 import java.io.Writer;
+import java.lang.reflect.Field;
 import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.Collection;
@@ -60,7 +62,7 @@ public class ParserFileGenerator {
             .addStatement(
                 "$L = $L",
                 CURR_STATE,
-                startingNode.getId()
+                startingNode.getId() % (1 << STATES_PER_FILE_LOG_2)
             )
             .addStatement(
                 "$L = $L",
@@ -73,13 +75,13 @@ public class ParserFileGenerator {
     }
 
     private static CodeBlock matchesFunctionImplementation(DFANode startingNode,
-        Collection<DFANode> dfaNodes, String className
+        Collection<DFANode> dfaNodes, Collection<RegexFlag> flags, String className
     ) {
         var codeBlockBuilder = CodeBlock.builder();
         initStartingVariables(startingNode, codeBlockBuilder);
         handleEmptyInputWithBooleanOutput(codeBlockBuilder);
         addMainWhileLoopForMatches(startingNode, dfaNodes, codeBlockBuilder, className);
-        checkIfStateIsAcceptingAndReturnBoolean(codeBlockBuilder);
+        checkIfStateIsAcceptingAndReturnBoolean(codeBlockBuilder, dfaNodes, flags, className);
         return codeBlockBuilder.build();
     }
 
@@ -90,14 +92,43 @@ public class ParserFileGenerator {
             .endControlFlow();
     }
 
-    private static void checkIfStateIsAcceptingAndReturnBoolean(Builder codeBlockBuilder) {
+    private static void checkIfStateIsAcceptingAndReturnBoolean(Builder codeBlockBuilder, Collection<DFANode> allNodes, Collection<RegexFlag> flags, String className) {
 
         codeBlockBuilder
-            .beginControlFlow(
-                "if ($L > $L)",
-                LAST_SUCCESSFUL_MATCH_AT,
-                MATCH_STARTED_AT
-            )
+            .beginControlFlow("switch ($L)", CURR_STATE_HANDLER);
+
+        for (int i = 0; i <= allNodes.size() >> STATES_PER_FILE_LOG_2; i++) {
+
+            codeBlockBuilder
+                .beginControlFlow("case $L:", i)
+                .addStatement(
+                    "$L.runEmpty()", stateHandlerPartName(className, i)
+                )
+                .addStatement("break")
+                .endControlFlow();
+
+        }
+
+        codeBlockBuilder
+            .endControlFlow();
+
+        if (flags.contains(RegexFlag.END_OF_STRING)) {
+            codeBlockBuilder
+                .beginControlFlow(
+                    "if ($L == $L - 1)",
+                    LAST_SUCCESSFUL_MATCH_AT,
+                    INPUT_STRING_LENGTH
+                );
+        } else {
+            codeBlockBuilder
+                .beginControlFlow(
+                    "if ($L > $L)",
+                    LAST_SUCCESSFUL_MATCH_AT,
+                    MATCH_STARTED_AT
+                );
+        }
+
+        codeBlockBuilder
             .addStatement("return true")
             .endControlFlow()
             .addStatement("return false");
@@ -120,6 +151,7 @@ public class ParserFileGenerator {
             .endControlFlow()
             .addStatement(
                 "$L = $L[$L]", CURR_CHAR, CHARS, CURR_INDEX
+                // "$L = $L.charAt($L)", CURR_CHAR, FUNCTION_INPUT_VARIABLE_NAME, CURR_INDEX
             )
             .beginControlFlow("switch ($L)", CURR_STATE_HANDLER);
 
@@ -160,7 +192,7 @@ public class ParserFileGenerator {
     }
 
     private static CodeBlock findMatchesFunctionImplementation(DFANode startingNode,
-        Collection<DFANode> dfaNodes, String className
+        Collection<DFANode> dfaNodes, Collection<RegexFlag> flags, String className
     ) {
         var codeBlockBuilder = CodeBlock.builder();
         initStartingVariables(startingNode, codeBlockBuilder);
@@ -170,18 +202,46 @@ public class ParserFileGenerator {
         );
         handleEmptyInputWithParseResultOutput(codeBlockBuilder);
         addMainWhileLoopForFindMatches(codeBlockBuilder, dfaNodes, className);
-        checkIfStateIsAcceptingAndReturnParseResult(codeBlockBuilder);
+        checkIfStateIsAcceptingAndReturnParseResult(codeBlockBuilder, dfaNodes, flags, className);
         return codeBlockBuilder.build();
     }
 
-    private static void checkIfStateIsAcceptingAndReturnParseResult(Builder codeBlockBuilder) {
+    private static void checkIfStateIsAcceptingAndReturnParseResult(Builder codeBlockBuilder, Collection<DFANode> allNodes, Collection<RegexFlag> flags, String className) {
 
         codeBlockBuilder
-            .beginControlFlow(
-                "if ($L > $L)",
-                LAST_SUCCESSFUL_MATCH_AT,
-                MATCH_STARTED_AT
-            )
+            .beginControlFlow("switch ($L)", CURR_STATE_HANDLER);
+
+        for (int i = 0; i <= allNodes.size() >> STATES_PER_FILE_LOG_2; i++) {
+
+            codeBlockBuilder
+                .beginControlFlow("case $L:", i)
+                .addStatement(
+                    "$L.runEmpty()", stateHandlerPartName(className, i)
+                )
+                .addStatement("break")
+                .endControlFlow();
+
+        }
+
+        codeBlockBuilder
+            .endControlFlow();
+
+        if (flags.contains(RegexFlag.END_OF_STRING)) {
+            codeBlockBuilder
+                .beginControlFlow(
+                    "if ($L == $L - 1)",
+                    LAST_SUCCESSFUL_MATCH_AT,
+                    INPUT_STRING_LENGTH
+                );
+        } else {
+            codeBlockBuilder
+                .beginControlFlow(
+                    "if ($L > $L)",
+                    LAST_SUCCESSFUL_MATCH_AT,
+                    MATCH_STARTED_AT
+                );
+        }
+        codeBlockBuilder
             .addStatement(
                 "$L.add(new $T($L, $L))",
                 FOUND,
@@ -272,6 +332,7 @@ public class ParserFileGenerator {
     public static void createMainParserFile(
         Collection<DFANode> dfaNodes,
         DFANode startingNode,
+        Collection<RegexFlag> flags,
         String className,
         String regex,
         Writer targetLocation
@@ -326,13 +387,13 @@ public class ParserFileGenerator {
             .addParameter(String.class, FUNCTION_INPUT_VARIABLE_NAME)
             .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
             .returns(boolean.class)
-            .addCode(matchesFunctionImplementation(startingNode, dfaNodes, className));
+            .addCode(matchesFunctionImplementation(startingNode, dfaNodes, flags, className));
 
         var findMatchesMethodBuilder = MethodSpec.methodBuilder("staticFindMatches")
             .addParameter(String.class, FUNCTION_INPUT_VARIABLE_NAME)
             .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
             .returns(ParseResult.class)
-            .addCode(findMatchesFunctionImplementation(startingNode, dfaNodes, className));
+            .addCode(findMatchesFunctionImplementation(startingNode, dfaNodes, flags, className));
 
         var addResultMethodBuilder = MethodSpec.methodBuilder("addResult")
             .addModifiers(Modifier.PUBLIC, Modifier.STATIC)

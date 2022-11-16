@@ -73,19 +73,19 @@ public class CodeGeneratorOrchestrator {
     private static void addAlternateEdges(DFANode startingNode) {
 
         for (var node : extractAllNodes(startingNode)) {
-            node.getTransitions().keySet().stream()
-                .filter(CharUtils::isAsciiPrintable)
-                .forEach(c -> {
-                    char otherCaseChar = Character.isUpperCase(c) ?
-                        Character.toLowerCase(c) :
-                        Character.toUpperCase(c);
-                    if (!node.getTransitions().containsKey(otherCaseChar)) {
-                        node.getTransitions().put(
-                            otherCaseChar,
-                            node.getTransitions().get(c)
-                        );
-                    }
-                });
+            var transitionKeyset = node.getTransitions().keySet().stream()
+                .filter(CharUtils::isAsciiPrintable).collect(Collectors.toList());
+            for (var c : transitionKeyset) {
+                char otherCaseChar = Character.isUpperCase(c) ?
+                    Character.toLowerCase(c) :
+                    Character.toUpperCase(c);
+                if (!node.getTransitions().containsKey(otherCaseChar)) {
+                    node.getTransitions().put(
+                        otherCaseChar,
+                        node.getTransitions().get(c)
+                    );
+                }
+            };
         }
 
     }
@@ -154,7 +154,6 @@ public class CodeGeneratorOrchestrator {
                     createIndividualStateHandler(
                         allNodes.get(i),
                         parseResult.getFlags(),
-                        parseResult.getStartingNode(),
                         name,
                         className,
                         writer
@@ -168,6 +167,7 @@ public class CodeGeneratorOrchestrator {
                     allNodes.size(),
                     writer,
                     parseResult.getStartingNode(),
+                    parseResult.getFlags(),
                     utilName(className),
                     className
                 );
@@ -176,6 +176,7 @@ public class CodeGeneratorOrchestrator {
             createMainParserFile(
                 allNodes,
                 parseResult.getStartingNode(),
+                parseResult.getFlags(),
                 className,
                 regex,
                 filer.createSourceFile(GENERATED_FILE_PACKAGE + "." + className).openWriter()

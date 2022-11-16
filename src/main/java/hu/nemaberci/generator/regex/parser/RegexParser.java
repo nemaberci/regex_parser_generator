@@ -47,8 +47,6 @@ public class RegexParser {
         return parseResult;
     }
 
-    // todo list
-    // 2. Support named capture groups
     private RegexNode parseRegex(String expression, int expressionStart, int expressionEnd,
         boolean newExpression
     ) {
@@ -78,11 +76,11 @@ public class RegexParser {
                     );
                     nodeParts.add(subExpression);
                     last = i + 1;
-                } else if (expression.charAt(i) == '(' && (i > 0
-                    && expression.charAt(i - 1) != '\\')) {
+                } else if (expression.charAt(i) == '(' && ((i > 0
+                    && expression.charAt(i - 1) != '\\') || i == 0)) {
                     stack++;
-                } else if (expression.charAt(i) == ')' && (i > 0
-                    && expression.charAt(i - 1) != '\\')) {
+                } else if (expression.charAt(i) == ')' && ((i > 0
+                    && expression.charAt(i - 1) != '\\') || i == 0)) {
                     stack--;
                 }
             }
@@ -229,7 +227,7 @@ public class RegexParser {
         }
         if (stack != 0) {
             throw new IllegalArgumentException(
-                "Missing right bracket for " + (expressionStart + last));
+                "Missing right bracket in " + expression);
         }
         i--;
         var subExpression = parseRegex(

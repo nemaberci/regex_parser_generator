@@ -119,15 +119,43 @@ public class IndividualStateHandlerGenerator {
     ) {
         if (edge.getValue() != null) {
 
-            codeBlockBuilder
-                .beginControlFlow("case $L:", (int) edge.getKey())
-                .addStatement(
-                    "$T.$L()",
-                    ClassName.get(GENERATED_FILE_PACKAGE, utilName(parentClassName)),
-                    nameOfFunctionThatLeadsToState(edge.getValue().getId())
-                )
-                .addStatement("break")
-                .endControlFlow();
+            if (edge.getValue().getTransitions().isEmpty()
+                && edge.getValue().getDefaultTransition() == null) {
+
+                codeBlockBuilder
+                    .beginControlFlow("case $L:", (int) edge.getKey());
+
+                if (edge.getValue().isAccepting()) {
+                    codeBlockBuilder
+                        .addStatement(
+                            "$T.$L()",
+                            ClassName.get(GENERATED_FILE_PACKAGE, utilName(parentClassName)),
+                            nameOfFunctionThatAddsResultFound()
+                        );
+                }
+
+                codeBlockBuilder
+                    .addStatement(
+                        "$T.$L()",
+                        ClassName.get(GENERATED_FILE_PACKAGE, utilName(parentClassName)),
+                        nameOfFunctionThatRestartsSearch()
+                    )
+                    .addStatement("break")
+                    .endControlFlow();
+
+            } else {
+
+                codeBlockBuilder
+                    .beginControlFlow("case $L:", (int) edge.getKey())
+                    .addStatement(
+                        "$T.$L()",
+                        ClassName.get(GENERATED_FILE_PACKAGE, utilName(parentClassName)),
+                        nameOfFunctionThatLeadsToState(edge.getValue().getId())
+                    )
+                    .addStatement("break")
+                    .endControlFlow();
+
+            }
 
         } else {
 
@@ -153,7 +181,7 @@ public class IndividualStateHandlerGenerator {
             // If the string has to match from the start and there is match in the DFA,
             // we move to an impossible state.
             codeBlockBuilder.addStatement("$T.$L = $L",
-                ClassName.get(GENERATED_FILE_PACKAGE, utilName(parentClassName)), CURR_STATE,
+                ClassName.get(GENERATED_FILE_PACKAGE, parentClassName), CURR_STATE,
                 IMPOSSIBLE_STATE_ID
             );
 
@@ -171,7 +199,8 @@ public class IndividualStateHandlerGenerator {
             } else {
 
                 codeBlockBuilder
-                    .addStatement("$T.$L()",
+                    .addStatement(
+                        "$T.$L()",
                         ClassName.get(GENERATED_FILE_PACKAGE, utilName(parentClassName)),
                         nameOfFunctionThatRestartsSearch()
                     );
@@ -191,10 +220,24 @@ public class IndividualStateHandlerGenerator {
 
     }
 
+    private static void createEmptyRun(Builder codeBlockBuilder, DFANode node,
+        String parentClassName
+    ) {
+
+        if (node.isAccepting()) {
+            codeBlockBuilder
+                .addStatement(
+                    "$T.$L()",
+                    ClassName.get(GENERATED_FILE_PACKAGE, utilName(parentClassName)),
+                    nameOfFunctionThatAddsResultFound()
+                );
+        }
+
+    }
+
     public static void createIndividualStateHandler(
         DFANode node,
         Collection<RegexFlag> flags,
-        DFANode startingNode,
         String className,
         String parentClassName,
         Writer targetLocation
@@ -213,6 +256,16 @@ public class IndividualStateHandlerGenerator {
 
         classImplBuilder.addMethod(
             MethodSpec.methodBuilder("run")
+                .returns(void.class)
+                .addCode(codeBlockBuilder.build())
+                .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+                .build()
+        );
+
+        codeBlockBuilder = CodeBlock.builder();
+        createEmptyRun(codeBlockBuilder, node, parentClassName);
+        classImplBuilder.addMethod(
+            MethodSpec.methodBuilder("runEmpty")
                 .returns(void.class)
                 .addCode(codeBlockBuilder.build())
                 .addModifiers(Modifier.PUBLIC, Modifier.STATIC)

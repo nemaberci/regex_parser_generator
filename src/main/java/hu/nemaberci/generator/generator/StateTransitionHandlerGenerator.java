@@ -16,10 +16,12 @@ import com.squareup.javapoet.CodeBlock;
 import com.squareup.javapoet.JavaFile;
 import com.squareup.javapoet.MethodSpec;
 import com.squareup.javapoet.TypeSpec;
+import hu.nemaberci.generator.regex.data.RegexFlag;
 import hu.nemaberci.generator.regex.dfa.data.DFANode;
 import java.io.IOException;
 import java.io.Writer;
 import java.time.Instant;
+import java.util.Collection;
 import javax.annotation.processing.Generated;
 import javax.lang.model.element.Modifier;
 
@@ -29,6 +31,7 @@ public class StateTransitionHandlerGenerator {
         int states,
         Writer targetLocation,
         DFANode defaultNode,
+        Collection<RegexFlag> flags,
         String className,
         String parentClassName
     ) {
@@ -68,27 +71,52 @@ public class StateTransitionHandlerGenerator {
 
         }
 
+        CodeBlock restartSearchBody;
+        if (flags.contains(RegexFlag.START_OF_STRING)) {
+            restartSearchBody = CodeBlock.builder()
+                .addStatement(
+                    "$T.$L = -1",
+                    ClassName.get(GENERATED_FILE_PACKAGE, parentClassName), CURR_STATE
+                )
+                .beginControlFlow(
+                    "if ($T.$L > 0)",
+                    ClassName.get(GENERATED_FILE_PACKAGE, parentClassName), LAST_SUCCESSFUL_MATCH_AT
+                )
+                .addStatement(
+                    "$T.addResult()",
+                    ClassName.get(GENERATED_FILE_PACKAGE, parentClassName)
+                )
+                .endControlFlow()
+                .build();
+        } else {
+            var codeBlockBuilder = CodeBlock.builder()
+                .addStatement(
+                    "$T.$L = $L",
+                    ClassName.get(GENERATED_FILE_PACKAGE, parentClassName), CURR_STATE,
+                    defaultNode.getId()
+                )
+                .addStatement(
+                    "$T.$L = $L",
+                    ClassName.get(GENERATED_FILE_PACKAGE, parentClassName),
+                    CURR_STATE_HANDLER,
+                    defaultNode.getId() >> STATES_PER_FILE_LOG_2
+                );
+            if (!flags.contains(RegexFlag.END_OF_STRING)) {
+                codeBlockBuilder
+                    .addStatement(
+                        "$T.addResult()",
+                        ClassName.get(GENERATED_FILE_PACKAGE, parentClassName)
+                    );
+            }
+            restartSearchBody = codeBlockBuilder
+                .build();
+        }
+
         var restartSearchMethod = MethodSpec.methodBuilder(nameOfFunctionThatRestartsSearch())
             .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
             .returns(void.class)
             .addCode(
-                CodeBlock.builder()
-                    .addStatement(
-                        "$T.$L = $L",
-                        ClassName.get(GENERATED_FILE_PACKAGE, parentClassName), CURR_STATE,
-                        defaultNode.getId()
-                    )
-                    .addStatement(
-                        "$T.$L = $L",
-                        ClassName.get(GENERATED_FILE_PACKAGE, parentClassName),
-                        CURR_STATE_HANDLER,
-                        defaultNode.getId() >> STATES_PER_FILE_LOG_2
-                    )
-                    .addStatement(
-                        "$T.addResult()",
-                        ClassName.get(GENERATED_FILE_PACKAGE, parentClassName)
-                    )
-                    .build()
+                restartSearchBody
             );
 
         classImplBuilder.addMethod(restartSearchMethod.build());
