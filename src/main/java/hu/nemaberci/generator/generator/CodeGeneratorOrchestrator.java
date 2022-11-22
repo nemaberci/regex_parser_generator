@@ -170,7 +170,7 @@ public class CodeGeneratorOrchestrator {
             }
 
             try (var writer = filer.createSourceFile(
-                GENERATED_FILE_PACKAGE + "." + utilName(className)).openWriter()) {
+                GENERATED_FILE_PACKAGE + "." + className).openWriter()) {
                 createMainParserFile(
                     allNodes,
                     parseResult.getStartingNode(),
