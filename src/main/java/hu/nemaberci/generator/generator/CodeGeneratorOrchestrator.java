@@ -126,6 +126,7 @@ public class CodeGeneratorOrchestrator {
             var allNodes = extractAllNodes(parseResult.getStartingNode()).stream()
                 .sorted(Comparator.comparingInt(DFANode::getId)).collect(Collectors.toList());
             final List<List<DFANode>> splitNodes = getSplitNodes(allNodes);
+
             for (int i = 0; i < splitNodes.size(); i++) {
                 final var partClassName = stateHandlerPartName(className, i);
                 try (var writer = filer.createSourceFile(
