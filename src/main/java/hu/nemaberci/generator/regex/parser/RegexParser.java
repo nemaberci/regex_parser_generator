@@ -12,7 +12,9 @@ import org.apache.commons.lang3.ArrayUtils;
 @Slf4j
 public class RegexParser {
 
-    public RegexParseResult parseRegex(String regex) {
+    private RegexParser() {}
+
+    public static RegexParseResult parseRegex(String regex) {
         List<RegexFlag> flags = new ArrayList<>();
         String regexToParse = regex;
         boolean hasUnparsedFlags = true;
@@ -27,11 +29,6 @@ public class RegexParser {
                     flags.add(RegexFlag.CASE_INDEPENDENT_ASCII);
                     break;
                 }
-                case "\\l": {
-                    regexToParse = regexToParse.substring(0, regexToParse.length() - 2);
-                    flags.add(RegexFlag.LAZY);
-                    break;
-                }
                 default: {
                     hasUnparsedFlags = false;
                 }
@@ -42,22 +39,14 @@ public class RegexParser {
             flags.add(RegexFlag.END_OF_STRING);
         }
         final var parseResult = new RegexParseResult()
-            .setFirstNode(parseRegex(regexToParse, 0, regexToParse.length(), true));
+            .setFirstNode(parseRegex(regexToParse, true));
         parseResult.getFlags().addAll(flags);
         return parseResult;
     }
 
-    private RegexNode parseRegex(String expression, int expressionStart, int expressionEnd,
-        boolean newExpression
-    ) {
+    private static RegexNode parseRegex(String expression, boolean newExpression) {
 
-        RegexNode createdNode = new RegexNode()
-            .setStart(expressionStart)
-            .setEnd(expressionEnd);
-
-        if (expression.isEmpty()) {
-            throw new IllegalArgumentException("Empty input at " + expressionStart);
-        }
+        RegexNode createdNode = new RegexNode();
 
         final var expressionLength = expression.length();
         final var nodeParts = new ArrayList<RegexNode>();
@@ -68,10 +57,10 @@ public class RegexParser {
                 if (i == expressionLength || (expression.charAt(i) == '|' && stack == 0)) {
                     if (last == 0 && i == expressionLength) {
                         return parseRegex(
-                            expression, expressionStart + last, expressionStart + i, false);
+                            expression, false);
                     }
                     var subExpression = parseRegex(
-                        expression.substring(last, i), expressionStart + last, expressionStart + i,
+                        expression.substring(last, i),
                         true
                     );
                     nodeParts.add(subExpression);
@@ -94,7 +83,7 @@ public class RegexParser {
             while (i < expressionLength) {
                 switch (expression.charAt(i)) {
                     case '(': {
-                        i = handleBracket(expression, expressionStart, nodeParts, i);
+                        i = handleBracket(expression, nodeParts, i);
                         break;
                     }
                     case '[': {
@@ -117,13 +106,9 @@ public class RegexParser {
                         handleOptional(nodeParts);
                         break;
                     }
-                    case 0x03B5: {
-                        handleEpsilon(expressionStart, nodeParts, i);
-                        break;
-                    }
                     case '\\': {
                         i++;
-                        nodeParts.add(getCharacterNode(expression, expressionStart, i));
+                        nodeParts.add(getCharacterNode(expression, i));
                         break;
                     }
                     case '.': {
@@ -133,7 +118,7 @@ public class RegexParser {
                         break;
                     }
                     default: {
-                        nodeParts.add(getCharacterNode(expression, expressionStart, i));
+                        nodeParts.add(getCharacterNode(expression, i));
                     }
                 }
                 i++;
@@ -191,8 +176,6 @@ public class RegexParser {
         }
         final var containedNode = nodeParts.get(nodeParts.size() - 1);
         final var newNode = new RegexNode()
-            .setStart(containedNode.getStart())
-            .setEnd(bracketClosedAt)
             .setType(RegexNodeType.CONCATENATION);
         for (int j = 0; j < min; j++) {
             newNode.getParts().add(containedNode.copy());
@@ -211,7 +194,7 @@ public class RegexParser {
         return i;
     }
 
-    private int handleBracket(String expression, int expressionStart, List<RegexNode> nodeParts,
+    private static int handleBracket(String expression, List<RegexNode> nodeParts,
         int i
     ) {
         int last = ++i;
@@ -231,10 +214,7 @@ public class RegexParser {
         }
         i--;
         var subExpression = parseRegex(
-            expression.substring(last, i), expressionStart + last, expressionStart
-                + i, true);
-        subExpression.setStart(subExpression.getStart() - 1);
-        subExpression.setEnd(subExpression.getEnd() + 1);
+            expression.substring(last, i), true);
         nodeParts.add(subExpression);
         return i;
     }
@@ -255,9 +235,7 @@ public class RegexParser {
         if (bracketClosedAt == 0) {
             throw new IllegalArgumentException("Square bracket not closed in '" + expression + "'");
         }
-        final var newNode = new RegexNode()
-            .setStart(nodeStart)
-            .setEnd(bracketClosedAt);
+        final var newNode = new RegexNode();
         List<Character> charList = new ArrayList<>();
         int j;
         if (isNegated) {
@@ -304,7 +282,7 @@ public class RegexParser {
         }
         final var containedNode = nodeParts.get(nodeParts.size() - 1);
         final var virtualNode = getVirtualNode(containedNode, RegexNodeType.STAR);
-        final var newNode = getNewNode(containedNode, RegexNodeType.CONCATENATION);
+        final var newNode = getNewNode(RegexNodeType.CONCATENATION);
         newNode
             .getParts().addAll(List.of(containedNode, virtualNode));
         nodeParts.set(nodeParts.size() - 1, newNode);
@@ -316,37 +294,25 @@ public class RegexParser {
         }
         final var containedNode = nodeParts.get(nodeParts.size() - 1);
         final var virtualNode = getVirtualNode(containedNode, RegexNodeType.EMPTY);
-        final var newNode = getNewNode(containedNode, RegexNodeType.ALTERNATION);
+        final var newNode = getNewNode(RegexNodeType.ALTERNATION);
         newNode
             .getParts().addAll(List.of(containedNode, virtualNode));
         nodeParts.set(nodeParts.size() - 1, newNode);
     }
 
-    private static void handleEpsilon(int expressionStart, List<RegexNode> nodeParts, int i) {
-        final var emptyNode = new RegexNode()
-            .setStart(expressionStart + i)
-            .setEnd(expressionStart + i + 1)
-            .setType(RegexNodeType.EMPTY);
-        nodeParts.add(emptyNode);
-    }
-
-    private static RegexNode getNewNode(RegexNode containedNode, RegexNodeType type) {
+    private static RegexNode getNewNode(RegexNodeType type) {
         return new RegexNode()
-            .setStart(containedNode.getStart())
-            .setEnd(containedNode.getEnd() + 1)
             .setType(type);
     }
 
     private static RegexNode getVirtualNode(RegexNode containedNode, RegexNodeType type) {
-        return getNewNode(containedNode, type)
+        return getNewNode(type)
             .setExpression(containedNode);
     }
 
-    private static RegexNode getCharacterNode(String expression, int expressionStart, int i) {
+    private static RegexNode getCharacterNode(String expression, int i) {
         return new RegexNode()
             .setType(RegexNodeType.CHARACTER)
-            .setStart(expressionStart + i)
-            .setEnd(expressionStart + i + 1)
             .setCharacters(new char[]{expression.charAt(i)});
     }
 

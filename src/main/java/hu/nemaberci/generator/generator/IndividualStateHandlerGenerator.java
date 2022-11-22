@@ -278,7 +278,6 @@ public class IndividualStateHandlerGenerator {
         );
         try {
             javaFileBuilder.build().writeTo(targetLocation);
-            targetLocation.close();
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

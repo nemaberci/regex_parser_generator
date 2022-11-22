@@ -9,7 +9,6 @@ import hu.nemaberci.generator.regex.nfa.data.NFANode;
 import hu.nemaberci.generator.regex.nfa.data.NFANode.NFANodeType;
 import hu.nemaberci.generator.regex.nfa.data.NFAParseResult;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -17,7 +16,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.EqualsAndHashCode;
@@ -25,17 +23,18 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.Accessors;
-import org.apache.commons.lang3.ArrayUtils;
 
 public class NFAToDFAConverter {
 
-    public DFAParseResult parseAndConvert(String regex) {
-        return convert(new RegexToNFAParser().parseAndConvert(regex));
+    private NFAToDFAConverter() {}
+
+    public static DFAParseResult parseAndConvert(String regex) {
+        return convert(RegexToNFAParser.parseAndConvert(regex));
     }
 
-    int nodeId = 0;
+    private static int nodeId = 0;
 
-    private DFANode reachableNFANodes(Collection<NFANode> nfaNodes) {
+    private static DFANode reachableNFANodes(Collection<NFANode> nfaNodes) {
 
         DFANode createdNode = new DFANode();
         List<NFANode> writableNFANodes = new ArrayList<>(nfaNodes);
@@ -64,7 +63,7 @@ public class NFAToDFAConverter {
 
     }
 
-    public DFAParseResult convert(NFAParseResult nfaParseResult) {
+    public static DFAParseResult convert(NFAParseResult nfaParseResult) {
 
         var startingDFANode = reachableNFANodes(List.of(nfaParseResult.getStartingNode()));
         startingDFANode.setId(nodeId++);
@@ -168,7 +167,7 @@ public class NFAToDFAConverter {
 
     }
 
-    private Set<NFANode> reachableThroughEpsilon(Collection<NFANode> startingNodes) {
+    private static Set<NFANode> reachableThroughEpsilon(Collection<NFANode> startingNodes) {
         Set<NFANode> found = new HashSet<>(startingNodes);
         List<NFANode> queue = new ArrayList<>(startingNodes);
         while (!queue.isEmpty()) {
@@ -184,7 +183,7 @@ public class NFAToDFAConverter {
         return found;
     }
 
-    private DFANode getDFANodeOfNFANodeList(List<DFANode> createdNodes, Set<NFANode> nfaNodeList) {
+    private static DFANode getDFANodeOfNFANodeList(List<DFANode> createdNodes, Set<NFANode> nfaNodeList) {
         var reachable = reachableThroughEpsilon(nfaNodeList);
         return createdNodes.stream()
             .filter(existingNode ->

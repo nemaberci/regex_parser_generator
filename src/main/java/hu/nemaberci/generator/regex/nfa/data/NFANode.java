@@ -17,7 +17,7 @@ public class NFANode {
 
     private final List<NFANodeEdge> edges = new ArrayList<>();
     private NFANodeType type = NFANodeType.EMPTY;
-    private int id = -1; //
+    private int id = -1;
 
     public enum NFANodeType {
         START,

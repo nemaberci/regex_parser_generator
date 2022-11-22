@@ -9,6 +9,8 @@ import java.util.stream.Collectors;
 
 public class DFAUtils {
 
+    private DFAUtils() {}
+
     public static List<DFANode> extractAllNodes(DFANode startingNode) {
         List<DFANode> allNodes = new ArrayList<>();
         List<DFANode> queue = new ArrayList<>();

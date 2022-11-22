@@ -7,7 +7,6 @@ import hu.nemaberci.generator.regex.nfa.data.NFANode.NFANodeType;
 import hu.nemaberci.generator.regex.nfa.data.NFANodeEdge;
 import hu.nemaberci.generator.regex.nfa.data.NFAParseResult;
 import hu.nemaberci.generator.regex.parser.RegexParser;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -15,19 +14,21 @@ import org.apache.commons.lang3.ArrayUtils;
 
 public class RegexToNFAParser {
 
+    private RegexToNFAParser() {}
+
     public static final char EPSILON = 0x0000;
 
-    private int id = 0;
+    private static int id = 0;
 
-    public NFAParseResult parseAndConvert(String regex) {
-        return convert(new RegexParser().parseRegex(regex));
+    public static NFAParseResult parseAndConvert(String regex) {
+        return convert(RegexParser.parseRegex(regex));
     }
 
-    private Set<Character> singleChar(char c) {
+    private static Set<Character> singleChar(char c) {
         return Set.of(c);
     }
 
-    private void generateNFAGraph(RegexNode regexNode, NFANode startNode, NFANode endNode) {
+    private static void generateNFAGraph(RegexNode regexNode, NFANode startNode, NFANode endNode) {
         switch (regexNode.getType()) {
             case EMPTY: {
                 startNode.getEdges().add(
@@ -178,8 +179,8 @@ public class RegexToNFAParser {
         }
     }
 
-    public NFAParseResult convert(RegexParseResult regexParseResult) {
-        this.id = 0;
+    public static NFAParseResult convert(RegexParseResult regexParseResult) {
+        id = 0;
         var startNode = new NFANode()
             .setType(NFANodeType.START)
             .setId(id++);

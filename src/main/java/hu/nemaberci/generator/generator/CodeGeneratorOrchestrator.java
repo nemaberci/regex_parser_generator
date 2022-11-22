@@ -33,7 +33,6 @@ public class CodeGeneratorOrchestrator {
     public static final String LAST_SUCCESSFUL_MATCH_AT = "lastSuccessfulMatchAt";
     public static final String CURR_STATE_HANDLER = "currentStateHandler";
     public static final String INPUT_STRING_LENGTH = "stringLength";
-    public static final String UTIL = "util";
     public static final int IMPOSSIBLE_STATE_ID = -1;
     public static final int STATES_PER_FILE_LOG_2 = 4;
 
@@ -118,9 +117,7 @@ public class CodeGeneratorOrchestrator {
 
         try {
 
-            var parseResult = new DFAMinimizer().parseAndConvertAndMinimize(regex);
-            // non-lazy doesn't really work atm
-            parseResult.getFlags().add(RegexFlag.LAZY);
+            var parseResult = DFAMinimizer.parseAndConvertAndMinimize(regex);
             calculateDistanceFromStartAndAddParents(parseResult.getStartingNode());
             if (parseResult.getFlags().contains(RegexFlag.CASE_INDEPENDENT_ASCII)) {
                 addAlternateEdges(parseResult.getStartingNode());
@@ -130,7 +127,6 @@ public class CodeGeneratorOrchestrator {
                 .sorted(Comparator.comparingInt(DFANode::getId)).collect(Collectors.toList());
             final List<List<DFANode>> splitNodes = getSplitNodes(allNodes);
             for (int i = 0; i < splitNodes.size(); i++) {
-                List<DFANode> split = splitNodes.get(i);
                 final var partClassName = stateHandlerPartName(className, i);
                 try (var writer = filer.createSourceFile(
                     GENERATED_FILE_PACKAGE + "." + partClassName).openWriter()) {
@@ -173,14 +169,17 @@ public class CodeGeneratorOrchestrator {
                 );
             }
 
-            createMainParserFile(
-                allNodes,
-                parseResult.getStartingNode(),
-                parseResult.getFlags(),
-                className,
-                regex,
-                filer.createSourceFile(GENERATED_FILE_PACKAGE + "." + className).openWriter()
-            );
+            try (var writer = filer.createSourceFile(
+                GENERATED_FILE_PACKAGE + "." + utilName(className)).openWriter()) {
+                createMainParserFile(
+                    allNodes,
+                    parseResult.getStartingNode(),
+                    parseResult.getFlags(),
+                    className,
+                    regex,
+                    writer
+                );
+            }
 
             return className;
         } catch (IOException e) {

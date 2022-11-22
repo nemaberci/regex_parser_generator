@@ -18,14 +18,10 @@ public class RegexNode {
     private final List<RegexNode> parts = new ArrayList<>();
     private RegexNode expression;
     private RegexNodeType type;
-    int start;
-    int end;
     char[] characters;
 
     public RegexNode copy() {
         var toReturn = new RegexNode()
-            .setStart(start)
-            .setEnd(end)
             .setCharacters(characters)
             .setType(type)
             .setExpression(expression);

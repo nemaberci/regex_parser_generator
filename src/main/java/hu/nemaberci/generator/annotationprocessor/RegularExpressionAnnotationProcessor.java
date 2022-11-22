@@ -29,37 +29,31 @@ public class RegularExpressionAnnotationProcessor extends AbstractProcessor {
             return false;
         }
         var generator = new CodeGeneratorOrchestrator();
-        Writer writer = null;
         try {
             var parserImpls = processingEnv.getFiler().createResource(
                 StandardLocation.CLASS_OUTPUT,
                 "",
                 PARSER_IMPLS_LOCATION
             );
-            writer = parserImpls.openWriter();
-            for (var toGenerate: annotated) {
-                var generatedClassName = toGenerate.getSimpleName().toString() + "_impl";
-                generator.generateParser(
-                    generatedClassName,
-                    toGenerate.getAnnotation(RegularExpression.class).value(),
-                    processingEnv.getFiler()
-                );
-                writer
-                    .append(GENERATED_FILE_PACKAGE)
-                    .append('.')
-                    .append(generatedClassName)
-                    .append('\n');
+            try (
+                var writer = parserImpls.openWriter();
+            ) {
+                for (var toGenerate : annotated) {
+                    var generatedClassName = toGenerate.getSimpleName().toString() + "_impl";
+                    generator.generateParser(
+                        generatedClassName,
+                        toGenerate.getAnnotation(RegularExpression.class).value(),
+                        processingEnv.getFiler()
+                    );
+                    writer
+                        .append(GENERATED_FILE_PACKAGE)
+                        .append('.')
+                        .append(generatedClassName)
+                        .append('\n');
+                }
             }
         } catch (IOException e) {
             throw new RuntimeException(e);
-        } finally {
-            if (writer != null) {
-                try {
-                    writer.close();
-                } catch (IOException e) {
-                    throw new RuntimeException("Could not close writer.");
-                }
-            }
         }
         return true;
     }
