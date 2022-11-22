@@ -11,7 +11,13 @@ version = "1.0"
 
 repositories {
     mavenCentral()
-    mavenLocal()
+    maven() {
+        url = uri("https://maven.pkg.github.com/nemaberci/regex_parser_api")
+        credentials {
+            username = project.findProperty("gpr.user") as String? ?: System.getenv("USERNAME")
+            password = project.findProperty("gpr.key") as String? ?: System.getenv("TOKEN")
+        }
+    }
 }
 
 dependencies {
@@ -30,10 +36,18 @@ tasks.getByName<Test>("test") {
 }
 
 publishing {
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/nemaberci/regex_parser_plugin")
+            credentials {
+                username = project.findProperty("gpr.user") as String? ?: System.getenv("USERNAME")
+                password = project.findProperty("gpr.key") as String? ?: System.getenv("TOKEN")
+            }
+        }
+    }
     publications {
-        // todo: add publications
-        create<MavenPublication>("maven") {
-
+        register<MavenPublication>("maven") {
             from(components["java"])
         }
     }
