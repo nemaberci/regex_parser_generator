@@ -9,7 +9,7 @@ public class DFATests {
 
     @Test
     void testDfaGetsGenerated() {
-        final var parseResult = new DFAMinimizer().parseAndConvertAndMinimize("qwe123");
+        final var parseResult = DFAMinimizer.parseAndConvertAndMinimize("qwe123");
         Assertions.assertEquals(
             7,
             DFAUtils.extractAllNodes(parseResult.getStartingNode()).size()
