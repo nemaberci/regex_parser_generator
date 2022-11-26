@@ -119,43 +119,15 @@ public class IndividualStateHandlerGenerator {
     ) {
         if (edge.getValue() != null) {
 
-            if (edge.getValue().getTransitions().isEmpty()
-                && edge.getValue().getDefaultTransition() == null) {
-
-                codeBlockBuilder
-                    .beginControlFlow("case $L:", (int) edge.getKey());
-
-                if (edge.getValue().isAccepting()) {
-                    codeBlockBuilder
-                        .addStatement(
-                            "$T.$L()",
-                            ClassName.get(GENERATED_FILE_PACKAGE, utilName(parentClassName)),
-                            nameOfFunctionThatAddsResultFound()
-                        );
-                }
-
-                codeBlockBuilder
-                    .addStatement(
-                        "$T.$L()",
-                        ClassName.get(GENERATED_FILE_PACKAGE, utilName(parentClassName)),
-                        nameOfFunctionThatRestartsSearch()
-                    )
-                    .addStatement("break")
-                    .endControlFlow();
-
-            } else {
-
-                codeBlockBuilder
-                    .beginControlFlow("case $L:", (int) edge.getKey())
-                    .addStatement(
-                        "$T.$L()",
-                        ClassName.get(GENERATED_FILE_PACKAGE, utilName(parentClassName)),
-                        nameOfFunctionThatLeadsToState(edge.getValue().getId())
-                    )
-                    .addStatement("break")
-                    .endControlFlow();
-
-            }
+            codeBlockBuilder
+                .beginControlFlow("case $L:", (int) edge.getKey())
+                .addStatement(
+                    "$T.$L()",
+                    ClassName.get(GENERATED_FILE_PACKAGE, utilName(parentClassName)),
+                    nameOfFunctionThatLeadsToState(edge.getValue().getId())
+                )
+                .addStatement("break")
+                .endControlFlow();
 
         } else {
 

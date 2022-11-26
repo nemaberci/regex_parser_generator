@@ -16,7 +16,6 @@ import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.STATES_
 import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.stateHandlerPartName;
 
 import com.squareup.javapoet.AnnotationSpec;
-import com.squareup.javapoet.ClassName;
 import com.squareup.javapoet.CodeBlock;
 import com.squareup.javapoet.CodeBlock.Builder;
 import com.squareup.javapoet.FieldSpec;
@@ -32,11 +31,11 @@ import hu.nemaberci.regex.data.ParseResult;
 import hu.nemaberci.regex.data.ParseResultMatch;
 import java.io.IOException;
 import java.io.Writer;
-import java.lang.reflect.Field;
 import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 import javax.annotation.processing.Generated;
 import javax.lang.model.element.Modifier;
 
@@ -75,7 +74,7 @@ public class ParserFileGenerator {
     }
 
     private static CodeBlock matchesFunctionImplementation(DFANode startingNode,
-        Collection<DFANode> dfaNodes, Collection<RegexFlag> flags, String className
+        List<DFANode> dfaNodes, Collection<RegexFlag> flags, String className
     ) {
         var codeBlockBuilder = CodeBlock.builder();
         initStartingVariables(startingNode, codeBlockBuilder);
@@ -92,7 +91,9 @@ public class ParserFileGenerator {
             .endControlFlow();
     }
 
-    private static void checkIfStateIsAcceptingAndReturnBoolean(Builder codeBlockBuilder, Collection<DFANode> allNodes, Collection<RegexFlag> flags, String className) {
+    private static void checkIfStateIsAcceptingAndReturnBoolean(Builder codeBlockBuilder,
+        List<DFANode> allNodes, Collection<RegexFlag> flags, String className
+    ) {
 
         codeBlockBuilder
             .beginControlFlow("switch ($L)", CURR_STATE_HANDLER);
@@ -111,6 +112,35 @@ public class ParserFileGenerator {
 
         codeBlockBuilder
             .endControlFlow();
+
+        codeBlockBuilder.beginControlFlow("switch ($L)", CURR_STATE_HANDLER);
+        boolean[] included = new boolean[(1 << STATES_PER_FILE_LOG_2)];
+
+        for (int i = 0; i < allNodes.size(); i++) {
+            var handler = i / (1 << STATES_PER_FILE_LOG_2);
+            var indexInHandler = i % (1 << STATES_PER_FILE_LOG_2);
+            var node = allNodes.get(i);
+            if (node.isAccepting()) {
+                if (!included[handler]) {
+                    codeBlockBuilder
+                        .beginControlFlow("case $L:", handler)
+                        .beginControlFlow("switch ($L)", CURR_STATE);
+                }
+                codeBlockBuilder
+                    .beginControlFlow("case $L:", indexInHandler)
+                    .addStatement("$L = $L - 1", LAST_SUCCESSFUL_MATCH_AT, INPUT_STRING_LENGTH)
+                    .endControlFlow();
+                included[handler] = true;
+            }
+            if ((i == allNodes.size() - 1 || indexInHandler == (1 << STATES_PER_FILE_LOG_2) - 1)
+                && included[handler]) {
+                codeBlockBuilder
+                    .endControlFlow()
+                    .endControlFlow();
+            }
+        }
+
+        codeBlockBuilder.endControlFlow();
 
         if (flags.contains(RegexFlag.END_OF_STRING)) {
             codeBlockBuilder
@@ -192,7 +222,7 @@ public class ParserFileGenerator {
     }
 
     private static CodeBlock findMatchesFunctionImplementation(DFANode startingNode,
-        Collection<DFANode> dfaNodes, Collection<RegexFlag> flags, String className
+        List<DFANode> dfaNodes, Collection<RegexFlag> flags, String className
     ) {
         var codeBlockBuilder = CodeBlock.builder();
         initStartingVariables(startingNode, codeBlockBuilder);
@@ -206,7 +236,9 @@ public class ParserFileGenerator {
         return codeBlockBuilder.build();
     }
 
-    private static void checkIfStateIsAcceptingAndReturnParseResult(Builder codeBlockBuilder, Collection<DFANode> allNodes, Collection<RegexFlag> flags, String className) {
+    private static void checkIfStateIsAcceptingAndReturnParseResult(Builder codeBlockBuilder,
+        List<DFANode> allNodes, Collection<RegexFlag> flags, String className
+    ) {
 
         codeBlockBuilder
             .beginControlFlow("switch ($L)", CURR_STATE_HANDLER);
@@ -225,6 +257,35 @@ public class ParserFileGenerator {
 
         codeBlockBuilder
             .endControlFlow();
+
+        codeBlockBuilder.beginControlFlow("switch ($L)", CURR_STATE_HANDLER);
+        boolean[] included = new boolean[(1 << STATES_PER_FILE_LOG_2)];
+
+        for (int i = 0; i < allNodes.size(); i++) {
+            var handler = i / (1 << STATES_PER_FILE_LOG_2);
+            var indexInHandler = i % (1 << STATES_PER_FILE_LOG_2);
+            var node = allNodes.get(i);
+            if (node.isAccepting()) {
+                if (!included[handler]) {
+                    codeBlockBuilder
+                        .beginControlFlow("case $L:", handler)
+                        .beginControlFlow("switch ($L)", CURR_STATE);
+                }
+                codeBlockBuilder
+                    .beginControlFlow("case $L:", indexInHandler)
+                    .addStatement("$L = $L - 1", LAST_SUCCESSFUL_MATCH_AT, INPUT_STRING_LENGTH)
+                    .endControlFlow();
+                included[handler] = true;
+            }
+            if ((i == allNodes.size() - 1 || indexInHandler == (1 << STATES_PER_FILE_LOG_2) - 1)
+                && included[handler]) {
+                codeBlockBuilder
+                    .endControlFlow()
+                    .endControlFlow();
+            }
+        }
+
+        codeBlockBuilder.endControlFlow();
 
         if (flags.contains(RegexFlag.END_OF_STRING)) {
             codeBlockBuilder
@@ -249,7 +310,9 @@ public class ParserFileGenerator {
                 MATCH_STARTED_AT,
                 LAST_SUCCESSFUL_MATCH_AT
             )
-            .endControlFlow()
+            .endControlFlow();
+
+        codeBlockBuilder
             .addStatement("return new $T($L)", ParseResult.class, FOUND);
     }
 
@@ -330,7 +393,7 @@ public class ParserFileGenerator {
     }
 
     public static void createMainParserFile(
-        Collection<DFANode> dfaNodes,
+        List<DFANode> dfaNodes,
         DFANode startingNode,
         Collection<RegexFlag> flags,
         String className,
@@ -370,10 +433,12 @@ public class ParserFileGenerator {
                 FieldSpec.builder(int.class, CURR_INDEX, Modifier.PUBLIC, Modifier.STATIC).build()
             )
             .addField(
-                FieldSpec.builder(int.class, MATCH_STARTED_AT, Modifier.PUBLIC, Modifier.STATIC).build()
+                FieldSpec.builder(int.class, MATCH_STARTED_AT, Modifier.PUBLIC, Modifier.STATIC)
+                    .build()
             )
             .addField(
-                FieldSpec.builder(int.class, LAST_SUCCESSFUL_MATCH_AT, Modifier.PUBLIC, Modifier.STATIC).build()
+                FieldSpec.builder(
+                    int.class, LAST_SUCCESSFUL_MATCH_AT, Modifier.PUBLIC, Modifier.STATIC).build()
             )
             .addField(
                 FieldSpec.builder(int.class, CURR_STATE, Modifier.PUBLIC, Modifier.STATIC).build()
@@ -410,7 +475,8 @@ public class ParserFileGenerator {
                     .addAnnotation(Override.class)
                     .addModifiers(Modifier.PUBLIC)
                     .returns(boolean.class)
-                    .addCode("return $L.staticMatches($L);", className, FUNCTION_INPUT_VARIABLE_NAME)
+                    .addCode(
+                        "return $L.staticMatches($L);", className, FUNCTION_INPUT_VARIABLE_NAME)
                     .build()
             )
             .addMethod(
@@ -419,7 +485,8 @@ public class ParserFileGenerator {
                     .addAnnotation(Override.class)
                     .addModifiers(Modifier.PUBLIC)
                     .returns(ParseResult.class)
-                    .addCode("return $L.staticFindMatches($L);", className, FUNCTION_INPUT_VARIABLE_NAME)
+                    .addCode(
+                        "return $L.staticFindMatches($L);", className, FUNCTION_INPUT_VARIABLE_NAME)
                     .build()
             );
 
