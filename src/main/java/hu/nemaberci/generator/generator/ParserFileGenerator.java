@@ -79,7 +79,7 @@ public class ParserFileGenerator {
         var codeBlockBuilder = CodeBlock.builder();
         initStartingVariables(startingNode, codeBlockBuilder);
         handleEmptyInputWithBooleanOutput(codeBlockBuilder);
-        addMainWhileLoopForMatches(startingNode, dfaNodes, codeBlockBuilder, className);
+        addMainWhileLoopForMatches(startingNode, dfaNodes, codeBlockBuilder, className, flags);
         checkIfStateIsAcceptingAndReturnBoolean(codeBlockBuilder, dfaNodes, flags, className);
         return codeBlockBuilder.build();
     }
@@ -94,24 +94,6 @@ public class ParserFileGenerator {
     private static void checkIfStateIsAcceptingAndReturnBoolean(Builder codeBlockBuilder,
         List<DFANode> allNodes, Collection<RegexFlag> flags, String className
     ) {
-
-        codeBlockBuilder
-            .beginControlFlow("switch ($L)", CURR_STATE_HANDLER);
-
-        for (int i = 0; i <= allNodes.size() >> STATES_PER_FILE_LOG_2; i++) {
-
-            codeBlockBuilder
-                .beginControlFlow("case $L:", i)
-                .addStatement(
-                    "$L.runEmpty()", stateHandlerPartName(className, i)
-                )
-                .addStatement("break")
-                .endControlFlow();
-
-        }
-
-        codeBlockBuilder
-            .endControlFlow();
 
         codeBlockBuilder.beginControlFlow("switch ($L)", CURR_STATE_HANDLER);
         boolean[] included = new boolean[(1 << STATES_PER_FILE_LOG_2)];
@@ -154,7 +136,7 @@ public class ParserFileGenerator {
                 .beginControlFlow(
                     "if ($L > $L)",
                     LAST_SUCCESSFUL_MATCH_AT,
-                    MATCH_STARTED_AT
+                    0
                 );
         }
 
@@ -165,7 +147,8 @@ public class ParserFileGenerator {
     }
 
     private static void addMainWhileLoopForMatches(DFANode startingNode,
-        Collection<DFANode> dfaNodes, Builder codeBlockBuilder, String className
+        Collection<DFANode> dfaNodes, Builder codeBlockBuilder, String className,
+        Collection<RegexFlag> flags
     ) {
         codeBlockBuilder
             .beginControlFlow(
@@ -198,12 +181,27 @@ public class ParserFileGenerator {
         }
 
         codeBlockBuilder
-            .endControlFlow()
-            .beginControlFlow(
-                "if ($L > $L)",
-                LAST_SUCCESSFUL_MATCH_AT,
-                MATCH_STARTED_AT
-            )
+            .endControlFlow();
+
+
+
+        if (flags.contains(RegexFlag.END_OF_STRING)) {
+            codeBlockBuilder
+                .beginControlFlow(
+                    "if ($L == $L - 1)",
+                    LAST_SUCCESSFUL_MATCH_AT,
+                    INPUT_STRING_LENGTH
+                );
+        } else {
+            codeBlockBuilder
+                .beginControlFlow(
+                    "if ($L > $L)",
+                    LAST_SUCCESSFUL_MATCH_AT,
+                    0
+                );
+        }
+
+        codeBlockBuilder
             .addStatement("return true")
             .endControlFlow()
             .beginControlFlow(
@@ -239,24 +237,6 @@ public class ParserFileGenerator {
     private static void checkIfStateIsAcceptingAndReturnParseResult(Builder codeBlockBuilder,
         List<DFANode> allNodes, Collection<RegexFlag> flags, String className
     ) {
-
-        codeBlockBuilder
-            .beginControlFlow("switch ($L)", CURR_STATE_HANDLER);
-
-        for (int i = 0; i <= allNodes.size() >> STATES_PER_FILE_LOG_2; i++) {
-
-            codeBlockBuilder
-                .beginControlFlow("case $L:", i)
-                .addStatement(
-                    "$L.runEmpty()", stateHandlerPartName(className, i)
-                )
-                .addStatement("break")
-                .endControlFlow();
-
-        }
-
-        codeBlockBuilder
-            .endControlFlow();
 
         codeBlockBuilder.beginControlFlow("switch ($L)", CURR_STATE_HANDLER);
         boolean[] included = new boolean[(1 << STATES_PER_FILE_LOG_2)];

@@ -66,36 +66,6 @@ public class StatesHandlerGenerator {
                 .build()
         );
 
-        codeBlockBuilder = CodeBlock.builder();
-
-        codeBlockBuilder.beginControlFlow(
-            "switch ($T.$L)", ClassName.get(GENERATED_FILE_PACKAGE, parentClassName), CURR_STATE);
-
-        for (int i = startingId; i <= endingId; i++) {
-
-            codeBlockBuilder
-                .beginControlFlow("case $L:", i - startingId)
-                .addStatement(
-                    "$T.runEmpty()", ClassName.get(GENERATED_FILE_PACKAGE,
-                        individualStateHandlerName(parentClassName, i)
-                    ))
-                .addStatement("break")
-                .endControlFlow();
-
-        }
-
-        codeBlockBuilder.endControlFlow();
-
-        classImplBuilder.addMethod(
-            MethodSpec.methodBuilder("runEmpty")
-                .returns(void.class)
-                .addCode(
-                    codeBlockBuilder.build()
-                )
-                .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
-                .build()
-        );
-
         var javaFileBuilder = JavaFile.builder(
             GENERATED_FILE_PACKAGE,
             classImplBuilder.build()

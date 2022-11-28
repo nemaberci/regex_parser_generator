@@ -192,21 +192,6 @@ public class IndividualStateHandlerGenerator {
 
     }
 
-    private static void createEmptyRun(Builder codeBlockBuilder, DFANode node,
-        String parentClassName
-    ) {
-
-        if (node.isAccepting()) {
-            codeBlockBuilder
-                .addStatement(
-                    "$T.$L()",
-                    ClassName.get(GENERATED_FILE_PACKAGE, utilName(parentClassName)),
-                    nameOfFunctionThatAddsResultFound()
-                );
-        }
-
-    }
-
     public static void createIndividualStateHandler(
         DFANode node,
         Collection<RegexFlag> flags,
@@ -228,16 +213,6 @@ public class IndividualStateHandlerGenerator {
 
         classImplBuilder.addMethod(
             MethodSpec.methodBuilder("run")
-                .returns(void.class)
-                .addCode(codeBlockBuilder.build())
-                .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
-                .build()
-        );
-
-        codeBlockBuilder = CodeBlock.builder();
-        createEmptyRun(codeBlockBuilder, node, parentClassName);
-        classImplBuilder.addMethod(
-            MethodSpec.methodBuilder("runEmpty")
                 .returns(void.class)
                 .addCode(codeBlockBuilder.build())
                 .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
