@@ -1,10 +1,9 @@
 package hu.nemaberci.generator.generator.cpp;
 
-import static hu.nemaberci.generator.generator.cpp.CppFileGeneratorUtils.staticVariable;
+import static hu.nemaberci.generator.generator.cpp.CppFileGeneratorUtils.functionBody;
 import static hu.nemaberci.generator.generator.cpp.CppFileGeneratorUtils.switchStatement;
 import static hu.nemaberci.generator.generator.cpp.CppFileGeneratorUtils.variable;
 import static hu.nemaberci.generator.generator.cpp.CppFileGeneratorUtils.withClass;
-import static hu.nemaberci.generator.generator.cpp.CppFileGeneratorUtils.functionBody;
 import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.CHARS;
 import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.CURR_CHAR;
 import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.CURR_INDEX;
@@ -19,20 +18,14 @@ import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrato
 import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.STATES_PER_FILE_LOG_2;
 import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.stateHandlerPartName;
 
-import com.squareup.javapoet.CodeBlock;
-import com.squareup.javapoet.CodeBlock.Builder;
 import hu.nemaberci.generator.generator.cpp.CppFileGeneratorUtils.FunctionParameter;
 import hu.nemaberci.generator.generator.cpp.CppFileGeneratorUtils.SwitchCase;
 import hu.nemaberci.generator.regex.data.RegexFlag;
 import hu.nemaberci.generator.regex.dfa.data.DFANode;
-import hu.nemaberci.regex.data.ParseResult;
-import hu.nemaberci.regex.data.ParseResultMatch;
 import java.io.IOException;
 import java.io.Writer;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 
 public class CppParserFileGenerator {
@@ -92,7 +85,7 @@ public class CppParserFileGenerator {
             var handler = i / (1 << STATES_PER_FILE_LOG_2);
             var indexInHandler = i % (1 << STATES_PER_FILE_LOG_2);
             var node = allNodes.get(i);
-            if (node.isAccepting() && !flags.contains(RegexFlag.END_OF_STRING)) {
+            if (node.isAccepting()) {
                 if (! included[handler]) {
                     stringBuilder
                         .append(
@@ -117,7 +110,7 @@ public class CppParserFileGenerator {
                     )
                     .append(
                         String.format(
-                            "%s = %s - 1;\n",
+                            "%s = %s - 1;break;\n",
                             LAST_SUCCESSFUL_MATCH_AT,
                             INPUT_STRING_LENGTH
                         )
@@ -129,6 +122,7 @@ public class CppParserFileGenerator {
                 && included[handler]) {
                 stringBuilder
                     .append("}\n")
+                    .append("break;\n")
                     .append("}\n");
             }
         }
@@ -138,9 +132,11 @@ public class CppParserFileGenerator {
         if (flags.contains(RegexFlag.END_OF_STRING)) {
             stringBuilder.append(
                 String.format(
-                    "if (%s == %s - 1) {\n",
+                    "if (%s == %s - 1 && %s != %s) {\n",
                     LAST_SUCCESSFUL_MATCH_AT,
-                    INPUT_STRING_LENGTH
+                    INPUT_STRING_LENGTH,
+                    CURR_STATE,
+                    IMPOSSIBLE_STATE_ID
                 )
             );
         } else {
@@ -155,7 +151,6 @@ public class CppParserFileGenerator {
 
         stringBuilder
             .append("return true;\n")
-            .append("}\n")
             .append("}\n")
             .append("return false;\n");
     }
@@ -239,9 +234,11 @@ public class CppParserFileGenerator {
             stringBuilder
                 .append(
                     String.format(
-                        "if (%s == %s - 1) {\n",
+                        "if (%s == %s - 1 && %s != %s) {\n",
                         LAST_SUCCESSFUL_MATCH_AT,
-                        INPUT_STRING_LENGTH
+                        INPUT_STRING_LENGTH,
+                        CURR_STATE,
+                        IMPOSSIBLE_STATE_ID
                     )
                 );
         } else {
@@ -279,6 +276,7 @@ public class CppParserFileGenerator {
                     CURR_INDEX
                 )
             )
+            .append("}\n")
             .append("}\n");
     }
 
@@ -321,7 +319,7 @@ public class CppParserFileGenerator {
             var handler = i / (1 << STATES_PER_FILE_LOG_2);
             var indexInHandler = i % (1 << STATES_PER_FILE_LOG_2);
             var node = allNodes.get(i);
-            if (node.isAccepting() && !flags.contains(RegexFlag.END_OF_STRING)) {
+            if (node.isAccepting()) {
                 if (! included[handler]) {
                     stringBuilder
                         .append(
@@ -346,7 +344,7 @@ public class CppParserFileGenerator {
                     )
                     .append(
                         String.format(
-                            "%s = %s - 1;\n",
+                            "%s = %s - 1;break;\n",
                             LAST_SUCCESSFUL_MATCH_AT,
                             INPUT_STRING_LENGTH
                         )
@@ -358,6 +356,7 @@ public class CppParserFileGenerator {
                 && included[handler]) {
                 stringBuilder
                     .append("}\n")
+                    .append("break;\n")
                     .append("}\n");
             }
         }

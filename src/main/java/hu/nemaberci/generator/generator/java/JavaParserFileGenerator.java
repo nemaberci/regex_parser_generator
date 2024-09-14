@@ -102,7 +102,7 @@ public class JavaParserFileGenerator {
             var handler = i / (1 << STATES_PER_FILE_LOG_2);
             var indexInHandler = i % (1 << STATES_PER_FILE_LOG_2);
             var node = allNodes.get(i);
-            if (node.isAccepting() && !flags.contains(RegexFlag.END_OF_STRING)) {
+            if (node.isAccepting()) {
                 if (!included[handler]) {
                     codeBlockBuilder
                         .beginControlFlow("case $L:", handler)
@@ -127,9 +127,11 @@ public class JavaParserFileGenerator {
         if (flags.contains(RegexFlag.END_OF_STRING)) {
             codeBlockBuilder
                 .beginControlFlow(
-                    "if ($L == $L - 1)",
+                    "if ($L == $L - 1 && $L != $L)",
                     LAST_SUCCESSFUL_MATCH_AT,
-                    INPUT_STRING_LENGTH
+                    INPUT_STRING_LENGTH,
+                    CURR_STATE,
+                    IMPOSSIBLE_STATE_ID
                 );
         } else {
             codeBlockBuilder
@@ -188,9 +190,11 @@ public class JavaParserFileGenerator {
         if (flags.contains(RegexFlag.END_OF_STRING)) {
             codeBlockBuilder
                 .beginControlFlow(
-                    "if ($L == $L - 1)",
+                    "if ($L == $L - 1 && $L != $L)",
                     LAST_SUCCESSFUL_MATCH_AT,
-                    INPUT_STRING_LENGTH
+                    INPUT_STRING_LENGTH,
+                    CURR_STATE,
+                    IMPOSSIBLE_STATE_ID
                 );
         } else {
             codeBlockBuilder
@@ -245,7 +249,7 @@ public class JavaParserFileGenerator {
             var handler = i / (1 << STATES_PER_FILE_LOG_2);
             var indexInHandler = i % (1 << STATES_PER_FILE_LOG_2);
             var node = allNodes.get(i);
-            if (node.isAccepting() && !flags.contains(RegexFlag.END_OF_STRING)) {
+            if (node.isAccepting()) {
                 if (!included[handler]) {
                     codeBlockBuilder
                         .beginControlFlow("case $L:", handler)
@@ -270,9 +274,11 @@ public class JavaParserFileGenerator {
         if (flags.contains(RegexFlag.END_OF_STRING)) {
             codeBlockBuilder
                 .beginControlFlow(
-                    "if ($L == $L - 1)",
+                    "if ($L == $L - 1 && $L != $L)",
                     LAST_SUCCESSFUL_MATCH_AT,
-                    INPUT_STRING_LENGTH
+                    INPUT_STRING_LENGTH,
+                    CURR_STATE,
+                    IMPOSSIBLE_STATE_ID
                 );
         } else {
             codeBlockBuilder
