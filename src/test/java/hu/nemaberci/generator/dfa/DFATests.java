@@ -13,7 +13,7 @@ public class DFATests {
         Assertions.assertEquals(
             7,
             DFAUtils.extractAllNodes(parseResult.getStartingNode()).size()
-        );;
+        );
     }
 
 }

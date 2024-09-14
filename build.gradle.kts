@@ -28,6 +28,7 @@ dependencies {
     implementation("org.apache.commons:commons-lang3:3.12.0")
     implementation("org.slf4j:slf4j-api:1.7.25")
     implementation("com.squareup:javapoet:1.13.0")
+    implementation("commons-cli:commons-cli:1.9.0")
 }
 
 tasks.getByName<Test>("test") {

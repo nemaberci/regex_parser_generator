@@ -1,9 +1,8 @@
 package hu.nemaberci.generator.annotationprocessor;
 
-import hu.nemaberci.generator.generator.CodeGeneratorOrchestrator;
+import hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator;
 import hu.nemaberci.regex.annotation.RegularExpression;
 import java.io.IOException;
-import java.io.Writer;
 import java.util.Set;
 import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.RoundEnvironment;
@@ -28,7 +27,7 @@ public class RegularExpressionAnnotationProcessor extends AbstractProcessor {
         if (annotated.isEmpty()) {
             return false;
         }
-        var generator = new CodeGeneratorOrchestrator();
+        var generator = new JavaCodeGeneratorOrchestrator();
         try {
             var parserImpls = processingEnv.getFiler().createResource(
                 StandardLocation.CLASS_OUTPUT,

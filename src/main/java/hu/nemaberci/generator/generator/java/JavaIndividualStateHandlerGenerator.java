@@ -1,13 +1,13 @@
-package hu.nemaberci.generator.generator;
+package hu.nemaberci.generator.generator.java;
 
 import static hu.nemaberci.generator.annotationprocessor.RegularExpressionAnnotationProcessor.GENERATED_FILE_PACKAGE;
-import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.CURR_CHAR;
-import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.CURR_STATE;
-import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.IMPOSSIBLE_STATE_ID;
-import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.nameOfFunctionThatAddsResultFound;
-import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.nameOfFunctionThatLeadsToState;
-import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.nameOfFunctionThatRestartsSearch;
-import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.utilName;
+import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.CURR_CHAR;
+import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.CURR_STATE;
+import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.IMPOSSIBLE_STATE_ID;
+import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.nameOfFunctionThatAddsResultFound;
+import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.nameOfFunctionThatLeadsToState;
+import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.nameOfFunctionThatRestartsSearch;
+import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.utilName;
 
 import com.squareup.javapoet.AnnotationSpec;
 import com.squareup.javapoet.ClassName;
@@ -26,7 +26,7 @@ import java.util.Map.Entry;
 import javax.annotation.processing.Generated;
 import javax.lang.model.element.Modifier;
 
-public class IndividualStateHandlerGenerator {
+public class JavaIndividualStateHandlerGenerator {
 
     private static void addCurrentDFANodeTransitionsForFindMatches(DFANode curr,
         Builder codeBlockBuilder,

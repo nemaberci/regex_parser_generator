@@ -1,8 +1,8 @@
-package hu.nemaberci.generator.generator;
+package hu.nemaberci.generator.generator.java;
 
 import static hu.nemaberci.generator.annotationprocessor.RegularExpressionAnnotationProcessor.GENERATED_FILE_PACKAGE;
-import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.CURR_STATE;
-import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.individualStateHandlerName;
+import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.CURR_STATE;
+import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.individualStateHandlerName;
 
 import com.squareup.javapoet.AnnotationSpec;
 import com.squareup.javapoet.ClassName;
@@ -17,7 +17,7 @@ import java.time.Instant;
 import javax.annotation.processing.Generated;
 import javax.lang.model.element.Modifier;
 
-public class StatesHandlerGenerator {
+public class JavaStatesHandlerGenerator {
 
     public static void createFileForStates(
         String className,

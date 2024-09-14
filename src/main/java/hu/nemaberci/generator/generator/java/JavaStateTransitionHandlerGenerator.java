@@ -1,14 +1,14 @@
-package hu.nemaberci.generator.generator;
+package hu.nemaberci.generator.generator.java;
 
 import static hu.nemaberci.generator.annotationprocessor.RegularExpressionAnnotationProcessor.GENERATED_FILE_PACKAGE;
-import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.CURR_INDEX;
-import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.CURR_STATE;
-import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.CURR_STATE_HANDLER;
-import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.LAST_SUCCESSFUL_MATCH_AT;
-import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.STATES_PER_FILE_LOG_2;
-import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.nameOfFunctionThatAddsResultFound;
-import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.nameOfFunctionThatLeadsToState;
-import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.nameOfFunctionThatRestartsSearch;
+import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.CURR_INDEX;
+import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.CURR_STATE;
+import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.CURR_STATE_HANDLER;
+import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.LAST_SUCCESSFUL_MATCH_AT;
+import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.STATES_PER_FILE_LOG_2;
+import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.nameOfFunctionThatAddsResultFound;
+import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.nameOfFunctionThatLeadsToState;
+import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.nameOfFunctionThatRestartsSearch;
 
 import com.squareup.javapoet.AnnotationSpec;
 import com.squareup.javapoet.ClassName;
@@ -25,7 +25,7 @@ import java.util.Collection;
 import javax.annotation.processing.Generated;
 import javax.lang.model.element.Modifier;
 
-public class StateTransitionHandlerGenerator {
+public class JavaStateTransitionHandlerGenerator {
 
     public static void createStateTransitionHandlerUtil(
         int states,

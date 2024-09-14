@@ -1,19 +1,19 @@
-package hu.nemaberci.generator.generator;
+package hu.nemaberci.generator.generator.java;
 
 import static hu.nemaberci.generator.annotationprocessor.RegularExpressionAnnotationProcessor.GENERATED_FILE_PACKAGE;
-import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.CHARS;
-import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.CURR_CHAR;
-import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.CURR_INDEX;
-import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.CURR_STATE;
-import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.CURR_STATE_HANDLER;
-import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.FOUND;
-import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.FUNCTION_INPUT_VARIABLE_NAME;
-import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.IMPOSSIBLE_STATE_ID;
-import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.INPUT_STRING_LENGTH;
-import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.LAST_SUCCESSFUL_MATCH_AT;
-import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.MATCH_STARTED_AT;
-import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.STATES_PER_FILE_LOG_2;
-import static hu.nemaberci.generator.generator.CodeGeneratorOrchestrator.stateHandlerPartName;
+import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.CHARS;
+import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.CURR_CHAR;
+import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.CURR_INDEX;
+import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.CURR_STATE;
+import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.CURR_STATE_HANDLER;
+import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.FOUND;
+import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.FUNCTION_INPUT_VARIABLE_NAME;
+import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.IMPOSSIBLE_STATE_ID;
+import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.INPUT_STRING_LENGTH;
+import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.LAST_SUCCESSFUL_MATCH_AT;
+import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.MATCH_STARTED_AT;
+import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.STATES_PER_FILE_LOG_2;
+import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.stateHandlerPartName;
 
 import com.squareup.javapoet.AnnotationSpec;
 import com.squareup.javapoet.CodeBlock;
@@ -39,7 +39,7 @@ import java.util.List;
 import javax.annotation.processing.Generated;
 import javax.lang.model.element.Modifier;
 
-public class ParserFileGenerator {
+public class JavaParserFileGenerator {
 
     private static void initStartingVariables(DFANode startingNode, Builder codeBlockBuilder) {
         codeBlockBuilder
@@ -102,7 +102,7 @@ public class ParserFileGenerator {
             var handler = i / (1 << STATES_PER_FILE_LOG_2);
             var indexInHandler = i % (1 << STATES_PER_FILE_LOG_2);
             var node = allNodes.get(i);
-            if (node.isAccepting()) {
+            if (node.isAccepting() && !flags.contains(RegexFlag.END_OF_STRING)) {
                 if (!included[handler]) {
                     codeBlockBuilder
                         .beginControlFlow("case $L:", handler)
@@ -245,7 +245,7 @@ public class ParserFileGenerator {
             var handler = i / (1 << STATES_PER_FILE_LOG_2);
             var indexInHandler = i % (1 << STATES_PER_FILE_LOG_2);
             var node = allNodes.get(i);
-            if (node.isAccepting()) {
+            if (node.isAccepting() && !flags.contains(RegexFlag.END_OF_STRING)) {
                 if (!included[handler]) {
                     codeBlockBuilder
                         .beginControlFlow("case $L:", handler)
