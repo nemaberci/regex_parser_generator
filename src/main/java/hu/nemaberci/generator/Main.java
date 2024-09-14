@@ -14,6 +14,7 @@ public class Main {
         options.addRequiredOption("r", "regex", true, "Regular expression to parse");
         options.addOption("l", "lang", true, "Language to use (one of: java, py, cpp)");
         options.addOption("o", "output", true, "Output folder");
+        options.addOption("f", "filename", true, "Generated filename / file prefix");
 
         final var parser = new DefaultParser();
         final var parsedOptions = parser.parse(options, args);
@@ -21,21 +22,21 @@ public class Main {
         if (parsedOptions.getParsedOptionValue("l", "java").equals("java")) {
             final var generator = new JavaCodeGeneratorOrchestrator();
             generator.generateParser(
-                "GeneratedParser",
+                parsedOptions.getParsedOptionValue("f", "GeneratedParser"),
                 parsedOptions.getParsedOptionValue("r"),
                 parsedOptions.getParsedOptionValue("o", ".")
             );
         } else if (parsedOptions.getParsedOptionValue("l").equals("cpp")) {
             final var generator = new CppCodeGeneratorOrchestrator();
             generator.generateParser(
-                "GeneratedParser",
+                parsedOptions.getParsedOptionValue("f", "GeneratedParser"),
                 parsedOptions.getParsedOptionValue("r"),
                 parsedOptions.getParsedOptionValue("o", ".")
             );
         } else if (parsedOptions.getParsedOptionValue("l").equals("py")) {
             final var generator = new PythonCodeGeneratorOrchestrator();
             generator.generateParser(
-                "GeneratedParser",
+                parsedOptions.getParsedOptionValue("f", "GeneratedParser"),
                 parsedOptions.getParsedOptionValue("r"),
                 parsedOptions.getParsedOptionValue("o", ".")
             );

@@ -226,7 +226,7 @@ public class PythonIndividualStateHandlerGenerator {
                 new SwitchCase(
                     '\'' + edge.getKey().toString() + '\'',
                     restartSearchBody(
-                        3,
+                        4,
                         defaultNode,
                         flags
                     )
