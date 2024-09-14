@@ -17,7 +17,6 @@ public class Main {
         final var parser = new DefaultParser();
         final var parsedOptions = parser.parse(options, args);
 
-
         if (parsedOptions.getParsedOptionValue("l", "java").equals("java")) {
             final var generator = new JavaCodeGeneratorOrchestrator();
             generator.generateParser(

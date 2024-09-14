@@ -422,7 +422,7 @@ public class CppParserFileGenerator {
             )
             .append(
                 String.format(
-                    "if (%s == %s) {\n",
+                    "if (%s < %s) {\n",
                     CURR_STATE,
                     0
                 )
