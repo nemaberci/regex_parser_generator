@@ -122,7 +122,6 @@ public class CppCodeGeneratorOrchestrator {
             var allNodes = extractAllNodes(parseResult.getStartingNode()).stream()
                 .sorted(Comparator.comparingInt(DFANode::getId))
                 .toList();
-            final List<List<DFANode>> splitNodes = getSplitNodes(allNodes);
 
             if (! new File(folderName).exists()) {
                 if (!new File(folderName).mkdirs()) {
@@ -133,45 +132,6 @@ public class CppCodeGeneratorOrchestrator {
 
             final var folderPrefix = folderName + "/";
             final var fileSuffix = ".cpp";
-
-            for (int i = 0; i < splitNodes.size(); i++) {
-                final var partClassName = stateHandlerPartName(className, i);
-                try (
-                    var writer = Files.newBufferedWriter(
-                        new File(folderPrefix + partClassName + fileSuffix)
-                            .toPath()
-                    )
-                ) {
-                    CppStatesHandlerGenerator.createFileForStates(
-                        partClassName,
-                        className,
-                        writer,
-                        i * (1 << STATES_PER_FILE_LOG_2),
-                        Math.min(
-                            i * (1 << STATES_PER_FILE_LOG_2) + (1 << STATES_PER_FILE_LOG_2) - 1,
-                            allNodes.size() - 1
-                        )
-                    );
-                }
-            }
-
-            for (int i = 0; i < allNodes.size(); i++) {
-                var name = individualStateHandlerName(className, i);
-                try (
-                    var writer = Files.newBufferedWriter(
-                        new File(folderPrefix + name + fileSuffix).toPath()
-                    )
-                ) {
-                    CppIndividualStateHandlerGenerator.createIndividualStateHandler(
-                        allNodes.get(i),
-                        parseResult.getStartingNode(),
-                        parseResult.getFlags(),
-                        name,
-                        className,
-                        writer
-                    );
-                }
-            }
 
             try (
                 var writer = Files.newBufferedWriter(
