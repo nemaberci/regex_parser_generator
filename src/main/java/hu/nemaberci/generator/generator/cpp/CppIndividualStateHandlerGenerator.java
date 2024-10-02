@@ -21,7 +21,8 @@ public class CppIndividualStateHandlerGenerator {
         if (flags.contains(RegexFlag.START_OF_STRING)) {
             restartSearchBody.append(
                     String.format(
-                        "%s = -1;\n",
+                        "std::cout << \"Transitioning to state %d\\n\";%s = -1;\n",
+                        IMPOSSIBLE_STATE_ID,
                         CURR_STATE
                     )
                 )
@@ -50,7 +51,8 @@ public class CppIndividualStateHandlerGenerator {
         } else {
             restartSearchBody.append(
                 String.format(
-                    "%s = %s;\n",
+                    "std::cout << \"Transitioning to state %d\\n\";%s = %s;\n",
+                    defaultNode.getId(),
                     CURR_STATE,
                     defaultNode.getId()
                 )
@@ -87,7 +89,11 @@ public class CppIndividualStateHandlerGenerator {
             for (int i = 0; i < 256; i++) {
                 switchCases.add(
                     new SwitchCase(
-                        Integer.toString((index << 8) ^ i),
+                        String.format(
+                            "(%d << 8) ^ %d",
+                            index,
+                            i
+                        ),
                         "return true;"
                     )
                 );
@@ -110,7 +116,11 @@ public class CppIndividualStateHandlerGenerator {
                 for (int i = 0; i < 256; i++) {
                     switchCases.add(
                         new SwitchCase(
-                            Integer.toString((index << 8) ^ i),
+                            String.format(
+                                "(%d << 8) ^ %d",
+                                index,
+                                i
+                            ),
                             String.format(
                                 "%s = %s;\n",
                                 LAST_SUCCESSFUL_MATCH_AT,
@@ -152,9 +162,14 @@ public class CppIndividualStateHandlerGenerator {
             ) {
                 edgeSwitchCases.add(
                     new SwitchCase(
-                        Integer.toString((index << 8) ^ i),
                         String.format(
-                            "%s = %d;\n",
+                            "(%d << 8) ^ '%c'",
+                            index,
+                            (char) i
+                        ),
+                        String.format(
+                            "std::cout << \"Transitioning to state %d\\n\";%s = %d;\n",
+                            curr.getDefaultTransition().getId(),
                             CURR_STATE,
                             curr.getDefaultTransition().getId()
                         )
@@ -215,9 +230,14 @@ public class CppIndividualStateHandlerGenerator {
             ) {
                 switchCases.add(
                     new SwitchCase(
-                        Integer.toString((index << 8) ^ i),
                         String.format(
-                            "%s = %d;\n",
+                            "(%d << 8) ^ '%c'",
+                            index,
+                            (char) i
+                        ),
+                        String.format(
+                            "std::cout << \"Transitioning to state %d\\n\";%s = %d;\n",
+                            curr.getDefaultTransition().getId(),
                             CURR_STATE,
                             curr.getDefaultTransition().getId()
                         )
@@ -241,14 +261,19 @@ public class CppIndividualStateHandlerGenerator {
 
             switchCases.add(
                 new SwitchCase(
-                    Integer.toString((index << 8) ^ ((int) edge.getKey())),
+                    String.format(
+                        "(%d << 8) ^ '%c'",
+                        index,
+                        edge.getKey()
+                    ),
                     (
                         addMatch
                             ? String.format("%s = %s;\n", LAST_SUCCESSFUL_MATCH_AT, CURR_INDEX)
                             : ""
                     )
                         + String.format(
-                        "%s = %d;\n",
+                        "std::cout << \"Transitioning to state %d\\n\";%s = %d;\n",
+                        edge.getValue().getId(),
                         CURR_STATE,
                         edge.getValue().getId()
                     )
@@ -259,7 +284,11 @@ public class CppIndividualStateHandlerGenerator {
 
             switchCases.add(
                 new SwitchCase(
-                    Integer.toString((index << 8) ^ ((int) edge.getKey())),
+                    String.format(
+                        "(%d << 8) ^ %d",
+                        index,
+                        (int) edge.getKey()
+                    ),
                     (addMatch
                         ? String.format("%s = %s;\n", LAST_SUCCESSFUL_MATCH_AT, CURR_INDEX)
                         : "")
@@ -285,7 +314,8 @@ public class CppIndividualStateHandlerGenerator {
                 new SwitchCase(
                     '\'' + edge.getKey().toString() + '\'',
                     String.format(
-                        "%s = %d;\n",
+                        "std::cout << \"Transitioning to state %d\\n\";%s = %d;\n",
+                        edge.getValue().getId(),
                         CURR_STATE,
                         edge.getValue().getId()
                     )
@@ -318,7 +348,8 @@ public class CppIndividualStateHandlerGenerator {
             // If the string has to match from the start and there is match in the DFA,
             // we move to an impossible state.
             return String.format(
-                "%s = %s;",
+                "std::cout << \"Transitioning to state %d\\n\";%s = %s;",
+                IMPOSSIBLE_STATE_ID,
                 CURR_STATE,
                 IMPOSSIBLE_STATE_ID
             );
@@ -328,7 +359,8 @@ public class CppIndividualStateHandlerGenerator {
             if (curr.getDefaultTransition() != null) {
 
                 return String.format(
-                    "%s = %d;\n",
+                    "std::cout << \"Transitioning to state %d\\n\";%s = %d;\n",
+                    curr.getDefaultTransition().getId(),
                     CURR_STATE,
                     curr.getDefaultTransition().getId()
                 );

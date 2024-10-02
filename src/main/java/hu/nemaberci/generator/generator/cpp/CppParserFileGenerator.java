@@ -529,7 +529,7 @@ public class CppParserFileGenerator {
     ) {
 
         final StringBuilder classBody = new StringBuilder();
-        final List<String> includes = new ArrayList<>(List.of("string", "deque", "utility"));
+        final List<String> includes = new ArrayList<>(List.of("string", "deque", "utility", "iostream"));
 
         classBody
             .append(
