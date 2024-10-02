@@ -342,6 +342,13 @@ public class CppParserFileGenerator {
         stringBuilder
             .append(
                 String.format(
+                    "std::cout << \"Adding result between \" << %s << \" and \" << %s << std::endl;\n",
+                    MATCH_STARTED_AT,
+                    LAST_SUCCESSFUL_MATCH_AT
+                )
+            )
+            .append(
+                String.format(
                     "%s.push_back(std::pair<int, int>(%s, %s));\n",
                     FOUND,
                     MATCH_STARTED_AT,
@@ -489,7 +496,7 @@ public class CppParserFileGenerator {
             )
             .append(
                 String.format(
-                    "std::cout << \"Adding result from \" << %s << \" to \" << %s;\n",
+                    "std::cout << \"Adding result between \" << %s << \" and \" << %s << std::endl;\n",
                     MATCH_STARTED_AT,
                     LAST_SUCCESSFUL_MATCH_AT
                 )
