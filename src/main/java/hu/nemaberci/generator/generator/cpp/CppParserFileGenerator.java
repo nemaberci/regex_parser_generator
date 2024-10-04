@@ -189,7 +189,6 @@ public class CppParserFileGenerator {
             //     )
             // );
             switchCases.addAll(switchCasesForOneVariableSwitchForMatches(
-                i,
                 node,
                 defaultNode,
                 flags
@@ -336,7 +335,7 @@ public class CppParserFileGenerator {
                 String.format(
                     "if (%s > %s) {\n",
                     LAST_SUCCESSFUL_MATCH_AT,
-                    0
+                    MATCH_STARTED_AT
                 )
             );
         }
@@ -431,7 +430,6 @@ public class CppParserFileGenerator {
             //     )
             // );
             switchCases.addAll(addCurrentDFANodeTransitionsForFindMatches(
-                i,
                 node,
                 defaultNode,
                 flags
@@ -487,6 +485,13 @@ public class CppParserFileGenerator {
                     "if (%s > %s) {\n",
                     LAST_SUCCESSFUL_MATCH_AT,
                     MATCH_STARTED_AT
+                )
+            )
+            .append(
+                String.format(
+                    "std::cout << \"Adding result from \" << %s << \" to \" << %s;\n",
+                    MATCH_STARTED_AT,
+                    LAST_SUCCESSFUL_MATCH_AT
                 )
             )
             .append(

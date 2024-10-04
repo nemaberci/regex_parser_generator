@@ -20,9 +20,9 @@ public class CppIndividualStateHandlerGenerator {
         StringBuilder restartSearchBody = new StringBuilder();
         if (flags.contains(RegexFlag.START_OF_STRING)) {
             restartSearchBody.append(
+                    // String.format("std::cout << \"Transitioning to state -1\\n\"") +
                     String.format(
-                        "std::cout << \"Transitioning to state %d\\n\";%s = -1;\n",
-                        IMPOSSIBLE_STATE_ID,
+                        "%s = -1;\n",
                         CURR_STATE
                     )
                 )
@@ -50,9 +50,9 @@ public class CppIndividualStateHandlerGenerator {
                 .append("}\n");
         } else {
             restartSearchBody.append(
+                // String.format("std::cout << \"Transitioning to state %d\n\";", defaultNode.getId()) +
                 String.format(
-                    "std::cout << \"Transitioning to state %d\\n\";%s = %s;\n",
-                    defaultNode.getId(),
+                    "%s = %d;\n",
                     CURR_STATE,
                     defaultNode.getId()
                 )
@@ -79,7 +79,6 @@ public class CppIndividualStateHandlerGenerator {
     }
 
     protected static List<SwitchCase> switchCasesForOneVariableSwitchForMatches(
-        int index,
         DFANode curr,
         DFANode defaultNode,
         Collection<RegexFlag> flags
@@ -91,7 +90,7 @@ public class CppIndividualStateHandlerGenerator {
                     new SwitchCase(
                         String.format(
                             "(%d << 8) ^ %d",
-                            index,
+                            curr.getId(),
                             i
                         ),
                         "return true;"
@@ -99,13 +98,12 @@ public class CppIndividualStateHandlerGenerator {
                 );
             }
         } else {
-            addNextStateNavigation(index, curr, defaultNode, switchCases, flags);
+            addNextStateNavigation(curr, defaultNode, switchCases, flags);
         }
         return switchCases;
     }
 
     protected static List<SwitchCase> addCurrentDFANodeTransitionsForFindMatches(
-        int index,
         DFANode curr,
         DFANode defaultNode,
         Collection<RegexFlag> flags
@@ -118,7 +116,7 @@ public class CppIndividualStateHandlerGenerator {
                         new SwitchCase(
                             String.format(
                                 "(%d << 8) ^ %d",
-                                index,
+                                curr.getId(),
                                 i
                             ),
                             String.format(
@@ -133,16 +131,15 @@ public class CppIndividualStateHandlerGenerator {
                     );
                 }
             } else {
-                lazyCharSwitch(index, curr, defaultNode, switchCases, flags);
+                lazyCharSwitch(curr, defaultNode, switchCases, flags);
             }
         } else {
-            addNextStateNavigation(index, curr, defaultNode, switchCases, flags);
+            addNextStateNavigation(curr, defaultNode, switchCases, flags);
         }
         return switchCases;
     }
 
     private static void lazyCharSwitch(
-        int index,
         DFANode curr,
         DFANode defaultNode,
         List<SwitchCase> switchCases,
@@ -151,7 +148,7 @@ public class CppIndividualStateHandlerGenerator {
 
         List<SwitchCase> edgeSwitchCases = new ArrayList<>();
         curr.getTransitions().entrySet().stream().sorted(Entry.comparingByKey()).forEach(
-            edge -> caseOfEdge(index, defaultNode, edgeSwitchCases, edge, flags, true)
+            edge -> caseOfEdge(curr, defaultNode, edgeSwitchCases, edge, flags, true)
         );
 
         for (int i = 0; i < 256; i++) {
@@ -163,13 +160,13 @@ public class CppIndividualStateHandlerGenerator {
                 edgeSwitchCases.add(
                     new SwitchCase(
                         String.format(
-                            "(%d << 8) ^ '%c'",
-                            index,
-                            (char) i
+                            "(%d << 8) ^ %d",
+                            curr.getId(),
+                            i
                         ),
+                        // String.format("std::cout << \"Transitioning to state %d\n\";", curr.getDefaultTransition().getId()) +
                         String.format(
-                            "std::cout << \"Transitioning to state %d\\n\";%s = %d;\n",
-                            curr.getDefaultTransition().getId(),
+                            "%s = %d;\n",
                             CURR_STATE,
                             curr.getDefaultTransition().getId()
                         )
@@ -211,7 +208,6 @@ public class CppIndividualStateHandlerGenerator {
     }
 
     private static void addNextStateNavigation(
-        int index,
         DFANode curr,
         DFANode defaultNode,
         List<SwitchCase> switchCases,
@@ -219,7 +215,7 @@ public class CppIndividualStateHandlerGenerator {
     ) {
 
         curr.getTransitions().entrySet().stream().sorted(Entry.comparingByKey()).forEach(
-            edge -> caseOfEdge(index, defaultNode, switchCases, edge, flags, false)
+            edge -> caseOfEdge(curr, defaultNode, switchCases, edge, flags, false)
         );
 
         for (int i = 0; i < 256; i++) {
@@ -231,26 +227,25 @@ public class CppIndividualStateHandlerGenerator {
                 switchCases.add(
                     new SwitchCase(
                         String.format(
-                            "(%d << 8) ^ '%c'",
-                            index,
-                            (char) i
+                            "(%d << 8) ^ %d",
+                            curr.getId(),
+                            i
                         ),
+                        // String.format("std::cout << \"Transitioning to state %d\n\";", curr.getDefaultTransition().getId()) +
                         String.format(
-                            "std::cout << \"Transitioning to state %d\\n\";%s = %d;\n",
-                            curr.getDefaultTransition().getId(),
+                            "%s = %d;\n",
                             CURR_STATE,
                             curr.getDefaultTransition().getId()
                         )
                     )
                 );
             }
-
         }
 
     }
 
     private static void caseOfEdge(
-        int index,
+        DFANode curr,
         DFANode defaultNode,
         List<SwitchCase> switchCases,
         Entry<Character, DFANode> edge,
@@ -262,21 +257,21 @@ public class CppIndividualStateHandlerGenerator {
             switchCases.add(
                 new SwitchCase(
                     String.format(
-                        "(%d << 8) ^ '%c'",
-                        index,
-                        edge.getKey()
+                        "(%d << 8) ^ %d",
+                        curr.getId(),
+                        (int) edge.getKey()
                     ),
                     (
                         addMatch
                             ? String.format("%s = %s;\n", LAST_SUCCESSFUL_MATCH_AT, CURR_INDEX)
                             : ""
                     )
-                        + String.format(
-                        "std::cout << \"Transitioning to state %d\\n\";%s = %d;\n",
-                        edge.getValue().getId(),
-                        CURR_STATE,
-                        edge.getValue().getId()
-                    )
+                        + // String.format("std::cout << \"Transitioning to state %d\n\";", edge.getValue().getId()) +
+                        String.format(
+                            "%s = %d;\n",
+                            CURR_STATE,
+                            edge.getValue().getId()
+                        )
                 )
             );
 
@@ -286,7 +281,7 @@ public class CppIndividualStateHandlerGenerator {
                 new SwitchCase(
                     String.format(
                         "(%d << 8) ^ %d",
-                        index,
+                        curr.getId(),
                         (int) edge.getKey()
                     ),
                     (addMatch
@@ -313,9 +308,9 @@ public class CppIndividualStateHandlerGenerator {
             switchCases.add(
                 new SwitchCase(
                     '\'' + edge.getKey().toString() + '\'',
-                    String.format(
-                        "std::cout << \"Transitioning to state %d\\n\";%s = %d;\n",
-                        edge.getValue().getId(),
+                    // String.format("std::cout << \"Transitioning to state %d\n\";", edge.getValue().getId()) +
+                        String.format(
+                        "%s = %d;\n",
                         CURR_STATE,
                         edge.getValue().getId()
                     )
