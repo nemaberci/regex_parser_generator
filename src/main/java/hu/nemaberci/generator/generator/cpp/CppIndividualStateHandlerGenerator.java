@@ -119,9 +119,9 @@ public class CppIndividualStateHandlerGenerator {
                                 curr.getId(),
                                 i
                             ),
+                            // String.format("std::cout << \"Found match at \" << %s << std::endl;\n", CURR_INDEX) +
                             String.format(
-                                "std::cout << \"Found match at \" << %s << std::endl;%s = %s;\n",
-                                CURR_INDEX,
+                                "%s = %s;\n",
                                 LAST_SUCCESSFUL_MATCH_AT,
                                 CURR_INDEX
                             ) + restartSearchBody(
@@ -167,7 +167,9 @@ public class CppIndividualStateHandlerGenerator {
                         ),
                         // String.format("std::cout << \"Transitioning to state %d\n\";", curr.getDefaultTransition().getId()) +
                         String.format(
-                            "%s = %d;\n",
+                            "%s = %s;\n%s = %d;\n",
+                            LAST_SUCCESSFUL_MATCH_AT,
+                            CURR_INDEX,
                             CURR_STATE,
                             curr.getDefaultTransition().getId()
                         )
@@ -264,10 +266,14 @@ public class CppIndividualStateHandlerGenerator {
                     ),
                     (
                         addMatch
-                            ? String.format("std::cout << \"Found match at \" << %s << std::endl;%s = %s;\n", CURR_INDEX, LAST_SUCCESSFUL_MATCH_AT, CURR_INDEX)
+                            ? (
+                            // String.format("std::cout << \"Found match at \" << %s << std::endl;\n", CURR_INDEX) +
+                            String.format("%s = %s;\n", LAST_SUCCESSFUL_MATCH_AT, CURR_INDEX)
+                        )
                             : ""
                     )
-                        + // String.format("std::cout << \"Transitioning to state %d\n\";", edge.getValue().getId()) +
+                        +
+                        // String.format("std::cout << \"Transitioning to state %d\n\";", edge.getValue().getId()) +
                         String.format(
                             "%s = %d;\n",
                             CURR_STATE,
@@ -286,7 +292,10 @@ public class CppIndividualStateHandlerGenerator {
                         (int) edge.getKey()
                     ),
                     (addMatch
-                        ? String.format("std::cout << \"Found match at \" << %s << std::endl;%s = %s;\n", CURR_INDEX, LAST_SUCCESSFUL_MATCH_AT, CURR_INDEX)
+                        ? (
+                        // String.format("std::cout << \"Found match at \" << %s << std::endl;\n", CURR_INDEX) +
+                        String.format("%s = %s;\n", LAST_SUCCESSFUL_MATCH_AT, CURR_INDEX)
+                    )
                         : "")
                         + restartSearchBody(
                         defaultNode,
@@ -310,7 +319,7 @@ public class CppIndividualStateHandlerGenerator {
                 new SwitchCase(
                     '\'' + edge.getKey().toString() + '\'',
                     // String.format("std::cout << \"Transitioning to state %d\n\";", edge.getValue().getId()) +
-                        String.format(
+                    String.format(
                         "%s = %d;\n",
                         CURR_STATE,
                         edge.getValue().getId()
