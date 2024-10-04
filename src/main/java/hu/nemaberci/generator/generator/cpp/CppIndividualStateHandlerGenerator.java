@@ -1,11 +1,7 @@
 package hu.nemaberci.generator.generator.cpp;
 
-import static hu.nemaberci.generator.generator.cpp.CppCodeGeneratorOrchestrator.CURR_INDEX;
+import static hu.nemaberci.generator.generator.cpp.CppCodeGeneratorOrchestrator.*;
 import static hu.nemaberci.generator.generator.cpp.CppParserFileGenerator.addResultFunctionImplementation;
-import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.CURR_CHAR;
-import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.CURR_STATE;
-import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.IMPOSSIBLE_STATE_ID;
-import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.LAST_SUCCESSFUL_MATCH_AT;
 
 import hu.nemaberci.generator.generator.cpp.CppFileGeneratorUtils.SwitchCase;
 import hu.nemaberci.generator.regex.data.RegexFlag;
@@ -17,7 +13,7 @@ import java.util.Map.Entry;
 
 public class CppIndividualStateHandlerGenerator {
 
-    private static String restartSearchBody(
+    static String restartSearchBody(
         DFANode defaultNode,
         Collection<RegexFlag> flags
     ) {
@@ -53,12 +49,12 @@ public class CppIndividualStateHandlerGenerator {
                 .append("}\n");
         } else {
             restartSearchBody.append(
-                    String.format(
-                        "%s = %s;\n",
-                        CURR_STATE,
-                        defaultNode.getId()
-                    )
-                );
+                String.format(
+                    "%s = %s;\n",
+                    CURR_STATE,
+                    defaultNode.getId()
+                )
+            );
             if (! flags.contains(RegexFlag.END_OF_STRING)) {
                 restartSearchBody.append(
                     addResultFunctionImplementation()
@@ -80,96 +76,94 @@ public class CppIndividualStateHandlerGenerator {
         return restartSearchBody.toString();
     }
 
-    protected static String addCurrentDFANodeTransitionsForMatches(
+    protected static List<SwitchCase> switchCasesForOneVariableSwitchForMatches(
+        int index,
         DFANode curr,
         DFANode defaultNode,
         Collection<RegexFlag> flags
     ) {
-        StringBuilder code = new StringBuilder();
+        final List<SwitchCase> switchCases = new ArrayList<>();
         if (curr.isAccepting()) {
-            code.append(
-                "return true;"
-            );
-            if (curr.getTransitions().isEmpty()) {
-                code.append(
-                    restartSearchBody(
-                        defaultNode,
-                        flags
+            for (int i = 0; i < 256; i++) {
+                switchCases.add(
+                    new SwitchCase(
+                        Integer.toString((index << 8) ^ i),
+                        "return true;"
                     )
                 );
-            } else {
-                lazyCharSwitch(curr, defaultNode, code, flags);
             }
         } else {
-            addNextStateNavigation(curr, defaultNode, code, flags);
+            addNextStateNavigation(index, curr, defaultNode, switchCases, flags);
         }
-        return code.toString();
+        return switchCases;
     }
 
-    protected static String addCurrentDFANodeTransitionsForFindMatches(
+    protected static List<SwitchCase> addCurrentDFANodeTransitionsForFindMatches(
+        int index,
         DFANode curr,
         DFANode defaultNode,
         Collection<RegexFlag> flags
     ) {
-        StringBuilder code = new StringBuilder();
+        final List<SwitchCase> switchCases = new ArrayList<>();
         if (curr.isAccepting()) {
-            code.append(
-                String.format(
-                    "%s = %s;",
-                    LAST_SUCCESSFUL_MATCH_AT,
-                    CURR_INDEX
-                )
-            );
             if (curr.getTransitions().isEmpty()) {
-                code.append(
-                    restartSearchBody(
-                        defaultNode,
-                        flags
-                    )
-                );
+                for (int i = 0; i < 256; i++) {
+                    switchCases.add(
+                        new SwitchCase(
+                            Integer.toString((index << 8) ^ i),
+                            String.format(
+                                "%s = %s;\n",
+                                LAST_SUCCESSFUL_MATCH_AT,
+                                CURR_INDEX
+                            ) + restartSearchBody(
+                                defaultNode,
+                                flags
+                            )
+                        )
+                    );
+                }
             } else {
-                lazyCharSwitch(curr, defaultNode, code, flags);
+                lazyCharSwitch(index, curr, defaultNode, switchCases, flags);
             }
         } else {
-            addNextStateNavigation(curr, defaultNode, code, flags);
+            addNextStateNavigation(index, curr, defaultNode, switchCases, flags);
         }
-        return code.toString();
+        return switchCases;
     }
 
     private static void lazyCharSwitch(
-        DFANode curr,
-        DFANode defaultNode,
-        StringBuilder stringBuilder,
-        Collection<RegexFlag> flags
-    ) {
-        List<SwitchCase> switchCases = new ArrayList<>();
-
-        curr.getTransitions().entrySet().stream().sorted(Entry.comparingByKey()).forEach(
-            edge -> caseOfEdge(defaultNode, switchCases, edge, flags)
-        );
-
-        addDefaultLazyCase(curr, defaultNode, switchCases, flags);
-
-        stringBuilder.append(
-            CppFileGeneratorUtils.switchStatement(
-                CURR_CHAR,
-                switchCases
-            )
-        );
-    }
-
-    private static void addDefaultLazyCase(
+        int index,
         DFANode curr,
         DFANode defaultNode,
         List<SwitchCase> switchCases,
         Collection<RegexFlag> flags
     ) {
-        switchCases.add(
-            new SwitchCase(
-                "default",
-                returnToDefaultNode(curr, defaultNode, flags)
-            )
+
+        List<SwitchCase> edgeSwitchCases = new ArrayList<>();
+        curr.getTransitions().entrySet().stream().sorted(Entry.comparingByKey()).forEach(
+            edge -> caseOfEdge(index, defaultNode, edgeSwitchCases, edge, flags, true)
         );
+
+        for (int i = 0; i < 256; i++) {
+            if (
+                curr.getTransitions().get((char) i) == null
+                    && ! flags.contains(RegexFlag.START_OF_STRING)
+                    && curr.getDefaultTransition() != null
+            ) {
+                edgeSwitchCases.add(
+                    new SwitchCase(
+                        Integer.toString((index << 8) ^ i),
+                        String.format(
+                            "%s = %d;\n",
+                            CURR_STATE,
+                            curr.getDefaultTransition().getId()
+                        )
+                    )
+                );
+            }
+        }
+
+        switchCases.addAll(edgeSwitchCases);
     }
 
     private static void addNextStateNavigation(
@@ -199,6 +193,84 @@ public class CppIndividualStateHandlerGenerator {
             )
         );
 
+    }
+
+    private static void addNextStateNavigation(
+        int index,
+        DFANode curr,
+        DFANode defaultNode,
+        List<SwitchCase> switchCases,
+        Collection<RegexFlag> flags
+    ) {
+
+        curr.getTransitions().entrySet().stream().sorted(Entry.comparingByKey()).forEach(
+            edge -> caseOfEdge(index, defaultNode, switchCases, edge, flags, false)
+        );
+
+        for (int i = 0; i < 256; i++) {
+            if (
+                curr.getTransitions().get((char) i) == null
+                    && ! flags.contains(RegexFlag.START_OF_STRING)
+                    && curr.getDefaultTransition() != null
+            ) {
+                switchCases.add(
+                    new SwitchCase(
+                        Integer.toString((index << 8) ^ i),
+                        String.format(
+                            "%s = %d;\n",
+                            CURR_STATE,
+                            curr.getDefaultTransition().getId()
+                        )
+                    )
+                );
+            }
+
+        }
+
+    }
+
+    private static void caseOfEdge(
+        int index,
+        DFANode defaultNode,
+        List<SwitchCase> switchCases,
+        Entry<Character, DFANode> edge,
+        Collection<RegexFlag> flags,
+        boolean addMatch
+    ) {
+        if (edge.getValue() != null) {
+
+            switchCases.add(
+                new SwitchCase(
+                    Integer.toString((index << 8) ^ ((int) edge.getKey())),
+                    (
+                        addMatch
+                            ? String.format("%s = %s;\n", LAST_SUCCESSFUL_MATCH_AT, CURR_INDEX)
+                            : ""
+                    )
+                        + String.format(
+                        "%s = %d;\n",
+                        CURR_STATE,
+                        edge.getValue().getId()
+                    )
+                )
+            );
+
+        } else {
+
+            switchCases.add(
+                new SwitchCase(
+                    Integer.toString((index << 8) ^ ((int) edge.getKey())),
+                    (addMatch
+                        ? String.format("%s = %s;\n", LAST_SUCCESSFUL_MATCH_AT, CURR_INDEX)
+                        : "")
+                        + restartSearchBody(
+                        defaultNode,
+                        flags
+                    )
+                )
+            );
+
+        }
     }
 
     private static void caseOfEdge(
@@ -256,10 +328,10 @@ public class CppIndividualStateHandlerGenerator {
             if (curr.getDefaultTransition() != null) {
 
                 return String.format(
-                        "%s = %d;\n",
-                        CURR_STATE,
+                    "%s = %d;\n",
+                    CURR_STATE,
                     curr.getDefaultTransition().getId()
-                    );
+                );
 
             } else {
 

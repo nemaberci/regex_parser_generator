@@ -20,6 +20,7 @@ import org.apache.commons.lang3.CharUtils;
 public class CppCodeGeneratorOrchestrator {
 
     public static final String CURR_CHAR = "currentCharacter";
+    public static final String SWITCH_VAR = "switchVar";
     public static final String CHARS = "characters";
     public static final String CURR_INDEX = "currentIndex";
     public static final String FUNCTION_INPUT_VARIABLE_NAME = "inputString";
@@ -83,30 +84,6 @@ public class CppCodeGeneratorOrchestrator {
             }
         }
 
-    }
-
-    public static String stateHandlerPartName(String originalClassName, int i) {
-        return originalClassName + "_part_" + i;
-    }
-
-    public static String individualStateHandlerName(String originalClassName, int i) {
-        return originalClassName + "_state_" + i;
-    }
-
-    public static String utilName(String originalClassName) {
-        return originalClassName + "_util";
-    }
-
-    public static String nameOfFunctionThatLeadsToState(int stateId) {
-        return "jumpToState" + stateId;
-    }
-
-    public static String nameOfFunctionThatRestartsSearch() {
-        return "restartSearch";
-    }
-
-    public static String nameOfFunctionThatAddsResultFound() {
-        return "resultFound";
     }
 
     public String generateParser(String className, String regex, String folderName) {

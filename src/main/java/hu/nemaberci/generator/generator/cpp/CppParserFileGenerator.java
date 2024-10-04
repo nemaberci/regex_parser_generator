@@ -1,27 +1,27 @@
 package hu.nemaberci.generator.generator.cpp;
 
+import static hu.nemaberci.generator.generator.cpp.CppCodeGeneratorOrchestrator.CHARS;
+import static hu.nemaberci.generator.generator.cpp.CppCodeGeneratorOrchestrator.CURR_CHAR;
+import static hu.nemaberci.generator.generator.cpp.CppCodeGeneratorOrchestrator.CURR_INDEX;
+import static hu.nemaberci.generator.generator.cpp.CppCodeGeneratorOrchestrator.CURR_STATE;
+import static hu.nemaberci.generator.generator.cpp.CppCodeGeneratorOrchestrator.FOUND;
+import static hu.nemaberci.generator.generator.cpp.CppCodeGeneratorOrchestrator.FUNCTION_INPUT_VARIABLE_NAME;
+import static hu.nemaberci.generator.generator.cpp.CppCodeGeneratorOrchestrator.IMPOSSIBLE_STATE_ID;
+import static hu.nemaberci.generator.generator.cpp.CppCodeGeneratorOrchestrator.INPUT_STRING_LENGTH;
+import static hu.nemaberci.generator.generator.cpp.CppCodeGeneratorOrchestrator.LAST_SUCCESSFUL_MATCH_AT;
+import static hu.nemaberci.generator.generator.cpp.CppCodeGeneratorOrchestrator.MATCH_STARTED_AT;
+import static hu.nemaberci.generator.generator.cpp.CppCodeGeneratorOrchestrator.SWITCH_VAR;
 import static hu.nemaberci.generator.generator.cpp.CppFileGeneratorUtils.functionBody;
 import static hu.nemaberci.generator.generator.cpp.CppFileGeneratorUtils.switchStatement;
 import static hu.nemaberci.generator.generator.cpp.CppFileGeneratorUtils.variable;
 import static hu.nemaberci.generator.generator.cpp.CppFileGeneratorUtils.withClass;
 import static hu.nemaberci.generator.generator.cpp.CppIndividualStateHandlerGenerator.addCurrentDFANodeTransitionsForFindMatches;
-import static hu.nemaberci.generator.generator.cpp.CppIndividualStateHandlerGenerator.addCurrentDFANodeTransitionsForMatches;
-import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.CHARS;
-import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.CURR_CHAR;
-import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.CURR_INDEX;
-import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.CURR_STATE;
-import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.CURR_STATE_HANDLER;
-import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.FOUND;
-import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.FUNCTION_INPUT_VARIABLE_NAME;
-import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.IMPOSSIBLE_STATE_ID;
-import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.INPUT_STRING_LENGTH;
-import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.LAST_SUCCESSFUL_MATCH_AT;
-import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.MATCH_STARTED_AT;
-import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.STATES_PER_FILE_LOG_2;
-import static hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator.stateHandlerPartName;
+import static hu.nemaberci.generator.generator.cpp.CppIndividualStateHandlerGenerator.restartSearchBody;
+import static hu.nemaberci.generator.generator.cpp.CppIndividualStateHandlerGenerator.switchCasesForOneVariableSwitchForMatches;
 
 import hu.nemaberci.generator.generator.cpp.CppFileGeneratorUtils.FunctionParameter;
 import hu.nemaberci.generator.generator.cpp.CppFileGeneratorUtils.SwitchCase;
+import hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator;
 import hu.nemaberci.generator.regex.data.RegexFlag;
 import hu.nemaberci.generator.regex.dfa.data.DFANode;
 import java.io.IOException;
@@ -37,6 +37,7 @@ public class CppParserFileGenerator {
         stringBuilder
             .append(variable("const char *", CHARS, String.format("%s.c_str()", FUNCTION_INPUT_VARIABLE_NAME)))
             .append(variable("char", CURR_CHAR, "0"))
+            .append(variable("int", SWITCH_VAR, "0"))
             .append(variable("int", CURR_INDEX, "0"))
             .append(variable("int", MATCH_STARTED_AT, "0"))
             .append(variable("int", LAST_SUCCESSFUL_MATCH_AT, "0"))
@@ -159,6 +160,14 @@ public class CppParserFileGenerator {
                     CHARS,
                     CURR_INDEX
                 )
+            )
+            .append(
+                String.format(
+                    "%s = (%s << 8) ^ ((int) %s);\n",
+                    SWITCH_VAR,
+                    CURR_STATE,
+                    CURR_CHAR
+                )
             );
 
         List<SwitchCase> switchCases = new ArrayList<>();
@@ -169,23 +178,52 @@ public class CppParserFileGenerator {
         while (iterator.hasNext()) {
             final var node = iterator.next();
 
+            // switchCases.add(
+            //     new SwitchCase(
+            //         String.valueOf(i),
+            //         addCurrentDFANodeTransitionsForMatches(
+            //             node,
+            //             defaultNode,
+            //             flags
+            //         )
+            //     )
+            // );
+            switchCases.addAll(switchCasesForOneVariableSwitchForMatches(
+                i,
+                node,
+                defaultNode,
+                flags
+            ));
+
+            i++;
+        }
+
+        if (flags.contains(RegexFlag.START_OF_STRING)) {
             switchCases.add(
                 new SwitchCase(
-                    String.valueOf(i),
-                    addCurrentDFANodeTransitionsForMatches(
-                        node,
+                    "default",
+                    String.format(
+                        "%s = %s;",
+                        CURR_STATE,
+                        IMPOSSIBLE_STATE_ID
+                    )
+                )
+            );
+        } else {
+            switchCases.add(
+                new SwitchCase(
+                    "default",
+                    restartSearchBody(
                         defaultNode,
                         flags
                     )
                 )
             );
-
-            i++;
         }
 
         stringBuilder.append(
             switchStatement(
-                CURR_STATE,
+                SWITCH_VAR,
                 switchCases
             )
         );
@@ -364,6 +402,14 @@ public class CppParserFileGenerator {
                     CHARS,
                     CURR_INDEX
                 )
+            )
+            .append(
+                String.format(
+                    "%s = (%s << 8) ^ ((int) %s);\n",
+                    SWITCH_VAR,
+                    CURR_STATE,
+                    CURR_CHAR
+                )
             );
 
         List<SwitchCase> switchCases = new ArrayList<>();
@@ -374,23 +420,52 @@ public class CppParserFileGenerator {
         while (iterator.hasNext()) {
             final var node = iterator.next();
 
+            // switchCases.add(
+            //     new SwitchCase(
+            //         String.valueOf(i),
+            //         addCurrentDFANodeTransitionsForFindMatches(
+            //             node,
+            //             defaultNode,
+            //             flags
+            //         )
+            //     )
+            // );
+            switchCases.addAll(addCurrentDFANodeTransitionsForFindMatches(
+                i,
+                node,
+                defaultNode,
+                flags
+            ));
+
+            i++;
+        }
+
+        if (flags.contains(RegexFlag.START_OF_STRING)) {
             switchCases.add(
                 new SwitchCase(
-                    String.valueOf(i),
-                    addCurrentDFANodeTransitionsForFindMatches(
-                        node,
+                    "default",
+                    String.format(
+                        "%s = %s;",
+                        CURR_STATE,
+                        IMPOSSIBLE_STATE_ID
+                    )
+                )
+            );
+        } else {
+            switchCases.add(
+                new SwitchCase(
+                    "default",
+                    restartSearchBody(
                         defaultNode,
                         flags
                     )
                 )
             );
-
-            i++;
         }
 
         stringBuilder.append(
             switchStatement(
-                CURR_STATE,
+                SWITCH_VAR,
                 switchCases
             )
         );
@@ -486,31 +561,6 @@ public class CppParserFileGenerator {
                         flags,
                         className
                     )
-                )
-            )
-            .append(
-                functionBody(
-                    "addResult",
-                    "inline void",
-                    List.of(
-                        new FunctionParameter(
-                            "int&",
-                            "lastSuccessfulMatchAt"
-                        ),
-                        new FunctionParameter(
-                            "int&",
-                            "currentMatchStartedAt"
-                        ),
-                        new FunctionParameter(
-                            "int&",
-                            "currentIndex"
-                        ),
-                        new FunctionParameter(
-                            "std::deque<std::pair<int, int>>&",
-                            "found"
-                        )
-                    ),
-                    addResultFunctionImplementation()
                 )
             );
         final var classImpl = withClass(
