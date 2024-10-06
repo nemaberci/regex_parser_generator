@@ -50,7 +50,7 @@ public class CppIndividualStateHandlerGenerator {
                 .append("}\n");
         } else {
             restartSearchBody.append(
-                // String.format("std::cout << \"Transitioning to state %d\n\";", defaultNode.getId()) +
+                // String.format("std::cout << \"Restarting search that started at \" << %s << \", currently in state \" << %s << \", current character is \" << %s << std::endl;\n", MATCH_STARTED_AT, CURR_STATE, CURR_CHAR) +
                 String.format(
                     "%s = %d;\n",
                     CURR_STATE,
@@ -156,58 +156,49 @@ public class CppIndividualStateHandlerGenerator {
             if (
                 curr.getTransitions().get((char) i) == null
                     && ! flags.contains(RegexFlag.START_OF_STRING)
-                    && curr.getDefaultTransition() != null
             ) {
-                edgeSwitchCases.add(
-                    new SwitchCase(
-                        String.format(
-                            "(%d << 8) ^ %d",
-                            curr.getId(),
-                            i
-                        ),
-                        // String.format("std::cout << \"Transitioning to state %d\n\";", curr.getDefaultTransition().getId()) +
-                        String.format(
-                            "%s = %s;\n%s = %d;\n",
-                            LAST_SUCCESSFUL_MATCH_AT,
-                            CURR_INDEX,
-                            CURR_STATE,
-                            curr.getDefaultTransition().getId()
+                if (curr.getDefaultTransition() != null) {
+                    edgeSwitchCases.add(
+                        new SwitchCase(
+                            String.format(
+                                "(%d << 8) ^ %d",
+                                curr.getId(),
+                                i
+                            ),
+                            // String.format("std::cout << \"Transitioning to state %d\n\";", curr.getDefaultTransition().getId()) +
+                            String.format(
+                                "%s = %s;\n%s = %d;\n",
+                                LAST_SUCCESSFUL_MATCH_AT,
+                                CURR_INDEX,
+                                CURR_STATE,
+                                curr.getDefaultTransition().getId()
+                            )
                         )
-                    )
-                );
+                    );
+                } else {
+                    edgeSwitchCases.add(
+                        new SwitchCase(
+                            String.format(
+                                "(%d << 8) ^ %d",
+                                curr.getId(),
+                                i
+                            ),
+                            // String.format("std::cout << \"Transitioning to state %d\n\";", curr.getDefaultTransition().getId()) +
+                            String.format(
+                                "%s = %s;\n",
+                                LAST_SUCCESSFUL_MATCH_AT,
+                                CURR_INDEX
+                            ) + restartSearchBody(
+                                defaultNode,
+                                flags
+                            )
+                        )
+                    );
+                }
             }
         }
 
         switchCases.addAll(edgeSwitchCases);
-    }
-
-    private static void addNextStateNavigation(
-        DFANode curr,
-        DFANode defaultNode,
-        StringBuilder stringBuilder,
-        Collection<RegexFlag> flags
-    ) {
-
-        List<SwitchCase> switchCases = new ArrayList<>();
-
-        curr.getTransitions().entrySet().stream().sorted(Entry.comparingByKey()).forEach(
-            edge -> caseOfEdge(defaultNode, switchCases, edge, flags)
-        );
-
-        switchCases.add(
-            new SwitchCase(
-                "default",
-                returnToDefaultNode(curr, defaultNode, flags)
-            )
-        );
-        returnToDefaultNode(curr, defaultNode, flags);
-        stringBuilder.append(
-            CppFileGeneratorUtils.switchStatement(
-                CURR_CHAR,
-                switchCases
-            )
-        );
-
     }
 
     private static void addNextStateNavigation(
