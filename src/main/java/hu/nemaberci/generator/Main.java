@@ -2,6 +2,7 @@ package hu.nemaberci.generator;
 
 import hu.nemaberci.generator.generator.cpp.CppCodeGeneratorOrchestrator;
 import hu.nemaberci.generator.generator.java.JavaCodeGeneratorOrchestrator;
+import hu.nemaberci.generator.generator.python.PythonCodeGeneratorOrchestrator;
 import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
@@ -11,7 +12,7 @@ public class Main {
     public static void main(String[] args) throws ParseException {
         Options options = new Options();
         options.addRequiredOption("r", "regex", true, "Regular expression to parse");
-        options.addOption("l", "lang", true, "Language to use (one of: java, py, c)");
+        options.addOption("l", "lang", true, "Language to use (one of: java, py, cpp)");
         options.addOption("o", "output", true, "Output folder");
 
         final var parser = new DefaultParser();
@@ -24,8 +25,15 @@ public class Main {
                 parsedOptions.getParsedOptionValue("r"),
                 parsedOptions.getParsedOptionValue("o", ".")
             );
-        } else if (parsedOptions.getParsedOptionValue("l").equals("c")) {
+        } else if (parsedOptions.getParsedOptionValue("l").equals("cpp")) {
             final var generator = new CppCodeGeneratorOrchestrator();
+            generator.generateParser(
+                "GeneratedParser",
+                parsedOptions.getParsedOptionValue("r"),
+                parsedOptions.getParsedOptionValue("o", ".")
+            );
+        } else if (parsedOptions.getParsedOptionValue("l").equals("py")) {
+            final var generator = new PythonCodeGeneratorOrchestrator();
             generator.generateParser(
                 "GeneratedParser",
                 parsedOptions.getParsedOptionValue("r"),

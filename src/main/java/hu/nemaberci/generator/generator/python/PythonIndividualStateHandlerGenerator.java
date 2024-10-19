@@ -1,9 +1,8 @@
-package hu.nemaberci.generator.generator.cpp;
+package hu.nemaberci.generator.generator.python;
 
-import static hu.nemaberci.generator.generator.cpp.CppCodeGeneratorOrchestrator.*;
-import static hu.nemaberci.generator.generator.cpp.CppParserFileGenerator.addResultFunctionImplementation;
+import static hu.nemaberci.generator.generator.python.PythonCodeGeneratorOrchestrator.*;
+import static hu.nemaberci.generator.generator.python.PythonFileGeneratorUtils.*;
 
-import hu.nemaberci.generator.generator.cpp.CppFileGeneratorUtils.SwitchCase;
 import hu.nemaberci.generator.regex.data.RegexFlag;
 import hu.nemaberci.generator.regex.dfa.data.DFANode;
 import java.util.ArrayList;
@@ -11,65 +10,54 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map.Entry;
 
-public class CppIndividualStateHandlerGenerator {
+public class PythonIndividualStateHandlerGenerator {
 
     private static String restartSearchBody(
+        int depth,
         DFANode defaultNode,
         Collection<RegexFlag> flags
     ) {
         StringBuilder restartSearchBody = new StringBuilder();
         if (flags.contains(RegexFlag.START_OF_STRING)) {
             restartSearchBody.append(
-                    String.format(
-                        "%s = -1;\n",
-                        CURR_STATE
+                    statement(
+                        depth,
+                        String.format(
+                            "self.parent.%s = -1",
+                            CURR_STATE
+                        )
+                    ) + statement(
+                        depth,
+                        String.format(
+                            "self.parent.%s = None",
+                            CURR_STATE_HANDLER
+                        )
                     )
                 )
                 .append(
-                    String.format(
-                        "if (%s > 0) {\n",
-                        LAST_SUCCESSFUL_MATCH_AT
-                    )
-                )
-                .append(
-                    addResultFunctionImplementation()
-                    // String.format(
-                    //     "addResult("
-                    //         + "%s,"
-                    //         + "%s,"
-                    //         + "%s,"
-                    //         + "%s"
-                    //         + ");\n",
-                    //     LAST_SUCCESSFUL_MATCH_AT,
-                    //     MATCH_STARTED_AT,
-                    //     CURR_INDEX,
-                    //     FOUND
-                    // )
-                )
-                .append("}\n");
+                    addResultFunctionImplementation(depth)
+                );
         } else {
             restartSearchBody.append(
+                statement(
+                    depth,
                     String.format(
-                        "%s = %s;\n",
+                        "self.parent.%s = %s",
                         CURR_STATE,
                         defaultNode.getId()
                     )
-                );
+                ) + statement(
+                    depth,
+                    String.format(
+                        "self.parent.%s = self.parent.state_%d",
+                        CURR_STATE_HANDLER,
+                        defaultNode.getId()
+                    )
+                )
+            );
             if (! flags.contains(RegexFlag.END_OF_STRING)) {
                 restartSearchBody.append(
-                    addResultFunctionImplementation()
-                    // String.format(
-                    //     "addResult("
-                    //         + "%s,"
-                    //         + "%s,"
-                    //         + "%s,"
-                    //         + "%s"
-                    //         + ");\n",
-                    //     LAST_SUCCESSFUL_MATCH_AT,
-                    //     MATCH_STARTED_AT,
-                    //     CURR_INDEX,
-                    //     FOUND
-                    // )
+                    addResultFunctionImplementation(depth)
                 );
             }
         }
@@ -84,11 +72,12 @@ public class CppIndividualStateHandlerGenerator {
         StringBuilder code = new StringBuilder();
         if (curr.isAccepting()) {
             code.append(
-                "return true;"
+                "return True"
             );
             if (curr.getTransitions().isEmpty()) {
                 code.append(
                     restartSearchBody(
+                        3,
                         defaultNode,
                         flags
                     )
@@ -110,15 +99,19 @@ public class CppIndividualStateHandlerGenerator {
         StringBuilder code = new StringBuilder();
         if (curr.isAccepting()) {
             code.append(
-                String.format(
-                    "%s = %s;",
-                    LAST_SUCCESSFUL_MATCH_AT,
-                    CURR_INDEX
+                statement(
+                    3,
+                    String.format(
+                        "self.parent.%s = self.parent.%s;",
+                        LAST_SUCCESSFUL_MATCH_AT,
+                        CURR_INDEX
+                    )
                 )
             );
             if (curr.getTransitions().isEmpty()) {
                 code.append(
                     restartSearchBody(
+                        3,
                         defaultNode,
                         flags
                     )
@@ -147,8 +140,9 @@ public class CppIndividualStateHandlerGenerator {
         addDefaultLazyCase(curr, defaultNode, switchCases, flags);
 
         stringBuilder.append(
-            CppFileGeneratorUtils.switchStatement(
-                CURR_CHAR,
+            switchStatement(
+                3,
+                "c",
                 switchCases
             )
         );
@@ -187,10 +181,10 @@ public class CppIndividualStateHandlerGenerator {
                 returnToDefaultNode(curr, defaultNode, flags)
             )
         );
-        returnToDefaultNode(curr, defaultNode, flags);
         stringBuilder.append(
-            CppFileGeneratorUtils.switchStatement(
-                CURR_CHAR,
+            switchStatement(
+                3,
+                "c",
                 switchCases
             )
         );
@@ -208,10 +202,20 @@ public class CppIndividualStateHandlerGenerator {
             switchCases.add(
                 new SwitchCase(
                     '\'' + edge.getKey().toString() + '\'',
-                    String.format(
-                        "%s = %d;\n",
-                        CURR_STATE,
-                        edge.getValue().getId()
+                    statement(
+                        4,
+                        String.format(
+                            "self.parent.%s = %d",
+                            CURR_STATE,
+                            edge.getValue().getId()
+                        )
+                    ) + statement(
+                        4,
+                        String.format(
+                            "self.parent.%s = self.parent.state_%d",
+                            CURR_STATE_HANDLER,
+                            edge.getValue().getId()
+                        )
                     )
                 )
             );
@@ -222,6 +226,7 @@ public class CppIndividualStateHandlerGenerator {
                 new SwitchCase(
                     '\'' + edge.getKey().toString() + '\'',
                     restartSearchBody(
+                        3,
                         defaultNode,
                         flags
                     )
@@ -241,25 +246,39 @@ public class CppIndividualStateHandlerGenerator {
 
             // If the string has to match from the start and there is match in the DFA,
             // we move to an impossible state.
-            return String.format(
-                "%s = %s;",
-                CURR_STATE,
-                IMPOSSIBLE_STATE_ID
+            return statement(
+                4,
+                String.format(
+                    "self.parent.%s = %s;",
+                    CURR_STATE,
+                    - 1
+                )
             );
 
         } else {
 
             if (curr.getDefaultTransition() != null) {
 
-                return String.format(
-                        "%s = %d;\n",
+                return statement(
+                    4,
+                    String.format(
+                        "self.parent.%s = %d",
                         CURR_STATE,
-                    curr.getDefaultTransition().getId()
-                    );
+                        curr.getDefaultTransition().getId()
+                    )
+                ) + statement(
+                    4,
+                    String.format(
+                        "self.parent.%s = self.parent.state_%d",
+                        CURR_STATE_HANDLER,
+                        curr.getDefaultTransition().getId()
+                    )
+                );
 
             } else {
 
                 return restartSearchBody(
+                    4,
                     defaultNode,
                     flags
                 );

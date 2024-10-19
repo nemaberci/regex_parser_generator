@@ -1,15 +1,11 @@
-package hu.nemaberci.generator.generator.cpp;
+package hu.nemaberci.generator.generator.python;
 
-import static hu.nemaberci.generator.generator.cpp.CppFileGeneratorUtils.functionBody;
-import static hu.nemaberci.generator.generator.cpp.CppFileGeneratorUtils.switchStatement;
-import static hu.nemaberci.generator.generator.cpp.CppFileGeneratorUtils.variable;
-import static hu.nemaberci.generator.generator.cpp.CppFileGeneratorUtils.withClass;
-import static hu.nemaberci.generator.generator.cpp.CppIndividualStateHandlerGenerator.addCurrentDFANodeTransitionsForFindMatches;
-import static hu.nemaberci.generator.generator.cpp.CppIndividualStateHandlerGenerator.addCurrentDFANodeTransitionsForMatches;
 import static hu.nemaberci.generator.generator.cpp.CppCodeGeneratorOrchestrator.*;
+import static hu.nemaberci.generator.generator.python.PythonFileGeneratorUtils.*;
+import static hu.nemaberci.generator.generator.python.PythonIndividualStateHandlerGenerator.addCurrentDFANodeTransitionsForFindMatches;
 
-import hu.nemaberci.generator.generator.cpp.CppFileGeneratorUtils.FunctionParameter;
-import hu.nemaberci.generator.generator.cpp.CppFileGeneratorUtils.SwitchCase;
+import hu.nemaberci.generator.generator.cpp.CppFileGeneratorUtils.*;
+import hu.nemaberci.generator.generator.python.PythonFileGeneratorUtils.SwitchCase;
 import hu.nemaberci.generator.regex.data.RegexFlag;
 import hu.nemaberci.generator.regex.dfa.data.DFANode;
 import java.io.IOException;
@@ -19,18 +15,31 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 
-public class CppParserFileGenerator {
+public class PythonParserFileGenerator {
 
-    private static void initStartingVariables(DFANode startingNode, String className, StringBuilder stringBuilder) {
+    private static void initStartingVariables(
+        DFANode startingNode,
+        String className,
+        StringBuilder stringBuilder
+    ) {
         stringBuilder
-            .append(variable("const char *", CHARS, String.format("%s.c_str()", FUNCTION_INPUT_VARIABLE_NAME)))
-            .append(variable("char", CURR_CHAR, "0"))
-            .append(variable("int", CURR_INDEX, "0"))
-            .append(variable("int", MATCH_STARTED_AT, "0"))
-            .append(variable("int", LAST_SUCCESSFUL_MATCH_AT, "0"))
-            .append(variable("int", CURR_STATE, String.valueOf(startingNode.getId())))
-            .append(variable("const int", INPUT_STRING_LENGTH, String.format("%s.length()", FUNCTION_INPUT_VARIABLE_NAME)))
-            .append(variable("std::deque<std::pair<int, int>>", FOUND, "std::deque<std::pair<int, int>>()"));
+            .append(variable(2, "self." + CHARS, String.format("%s", FUNCTION_INPUT_VARIABLE_NAME)))
+            .append(variable(2, "self." + CURR_CHAR, "0"))
+            .append(variable(2, "self." + CURR_INDEX, "0"))
+            .append(variable(2, "self." + MATCH_STARTED_AT, "0"))
+            .append(variable(2, "self." + LAST_SUCCESSFUL_MATCH_AT, "0"))
+            .append(variable(2, "self." + CURR_STATE, String.valueOf(startingNode.getId())))
+            .append(variable(
+                2,
+                "self." + INPUT_STRING_LENGTH,
+                String.format("len(%s)", FUNCTION_INPUT_VARIABLE_NAME)
+            ))
+            .append(variable(2, "self." + FOUND, "[]"))
+            .append(variable(
+                2,
+                "self." + CURR_STATE_HANDLER,
+                String.format("self.state_%s", startingNode.getId())
+            ));
     }
 
     private static String matchesFunctionImplementation(
@@ -43,18 +52,25 @@ public class CppParserFileGenerator {
         var stringBuilder = new StringBuilder();
         initStartingVariables(startingNode, className, stringBuilder);
         handleEmptyInputWithBooleanOutput(stringBuilder);
-        addMainWhileLoopForMatches(startingNode, dfaNodes, defaultNode, stringBuilder, className, flags);
+        addMainWhileLoopForMatches(
+            startingNode,
+            dfaNodes,
+            defaultNode,
+            stringBuilder,
+            className,
+            flags
+        );
         checkIfStateIsAcceptingAndReturnBoolean(stringBuilder, dfaNodes, flags, className);
         return stringBuilder.toString();
     }
 
     private static void handleEmptyInputWithBooleanOutput(StringBuilder stringBuilder) {
         stringBuilder
-            .append("if (")
+            .append("\t".repeat(2))
+            .append("if ")
             .append(INPUT_STRING_LENGTH)
-            .append(" == 0) {\n")
-            .append("return false;\n")
-            .append("}\n");
+            .append(" == 0: \n")
+            .append(statement(3, "return False"));
     }
 
     private static void checkIfStateIsAcceptingAndReturnBoolean(
@@ -82,12 +98,13 @@ public class CppParserFileGenerator {
             }
         }
 
-        stringBuilder.append(
-            switchStatement(
-                CURR_STATE,
-                switchCases
-            )
-        );
+        // stringBuilder.append(
+        //     switchStatement(
+        //         1,
+        //         CURR_STATE,
+        //         switchCases
+        //     )
+        // );
 
         if (flags.contains(RegexFlag.END_OF_STRING)) {
             stringBuilder.append(
@@ -123,61 +140,45 @@ public class CppParserFileGenerator {
         String className,
         Collection<RegexFlag> flags
     ) {
+
         stringBuilder
             .append(
-                String.format(
-                    "while (%s < %s) {\n",
-                    CURR_INDEX,
-                    INPUT_STRING_LENGTH
+                statement(
+                    2,
+                    String.format(
+                        "while %s < %s:\n",
+                        CURR_INDEX,
+                        INPUT_STRING_LENGTH
+                    )
                 )
             )
             .append(
-                String.format(
-                    "if (%s == %s) {\n",
-                    CURR_STATE,
-                    IMPOSSIBLE_STATE_ID
+                statement(
+                    3,
+                    String.format(
+                        "if %s == %s:\n",
+                        CURR_STATE,
+                        IMPOSSIBLE_STATE_ID
+                    )
                 )
             )
-            .append("return false;\n")
-            .append("}\n")
             .append(
-                String.format(
-                    "%s = %s[%s];\n",
-                    CURR_CHAR,
-                    CHARS,
-                    CURR_INDEX
+                statement(
+                    4,
+                    "return False"
                 )
-            );
-
-        List<SwitchCase> switchCases = new ArrayList<>();
-
-        Iterator<DFANode> iterator = dfaNodes.iterator();
-        int i = 0;
-
-        while (iterator.hasNext()) {
-            final var node = iterator.next();
-
-            switchCases.add(
-                new SwitchCase(
-                    String.valueOf(i),
-                    addCurrentDFANodeTransitionsForMatches(
-                        node,
-                        defaultNode,
-                        flags
+            )
+            .append(
+                statement(
+                    3,
+                    String.format(
+                        "%s = %s[%s];\n",
+                        CURR_CHAR,
+                        CHARS,
+                        CURR_INDEX
                     )
                 )
             );
-
-            i++;
-        }
-
-        stringBuilder.append(
-            switchStatement(
-                CURR_STATE,
-                switchCases
-            )
-        );
-
 
         if (flags.contains(RegexFlag.END_OF_STRING)) {
             stringBuilder
@@ -256,10 +257,13 @@ public class CppParserFileGenerator {
                 switchCases.add(
                     new SwitchCase(
                         String.valueOf(i),
-                        String.format(
-                            "%s = %s - 1;\n",
-                            LAST_SUCCESSFUL_MATCH_AT,
-                            INPUT_STRING_LENGTH
+                        statement(
+                            3,
+                            String.format(
+                                "%s = %s - 1",
+                                "self." + LAST_SUCCESSFUL_MATCH_AT,
+                                "self." + INPUT_STRING_LENGTH
+                            )
                         )
                     )
                 );
@@ -268,53 +272,70 @@ public class CppParserFileGenerator {
 
         stringBuilder.append(
             switchStatement(
-                CURR_STATE,
+                2,
+                "self." + CURR_STATE,
                 switchCases
             )
         );
 
         if (flags.contains(RegexFlag.END_OF_STRING)) {
             stringBuilder.append(
-                String.format(
-                    "if (%s == %s - 1) {\n",
-                    LAST_SUCCESSFUL_MATCH_AT,
-                    INPUT_STRING_LENGTH
+                statement(
+                    2,
+                    String.format(
+                        "if (%s == %s - 1):",
+                        "self." + LAST_SUCCESSFUL_MATCH_AT,
+                        "self." + INPUT_STRING_LENGTH
+                    )
                 )
             );
         } else {
             stringBuilder.append(
-                String.format(
-                    "if (%s > %s) {\n",
-                    LAST_SUCCESSFUL_MATCH_AT,
-                    MATCH_STARTED_AT
+                statement(
+                    2,
+                    String.format(
+                        "if (%s > %s):",
+                        "self." + LAST_SUCCESSFUL_MATCH_AT,
+                        0
+                    )
                 )
             );
         }
         stringBuilder
             .append(
-                String.format(
-                    "%s.push_back(std::pair<int, int>(%s, %s));\n",
-                    FOUND,
-                    MATCH_STARTED_AT,
-                    LAST_SUCCESSFUL_MATCH_AT
+                statement(
+                    3,
+                    String.format(
+                        "%s.append((%s, %s));",
+                        "self." + FOUND,
+                        "self." + MATCH_STARTED_AT,
+                        "self." + LAST_SUCCESSFUL_MATCH_AT
+                    )
                 )
             )
-            .append("}\n")
             .append(
-                String.format(
-                    "return %s;",
-                    FOUND
+                statement(
+                    2,
+                    String.format(
+                        "return %s",
+                        "self." + FOUND
+                    )
                 )
             );
     }
 
     private static void handleEmptyInputWithParseResultOutput(StringBuilder stringBuilder) {
         stringBuilder
+            .append("\t".repeat(2))
             .append("if (")
-            .append(INPUT_STRING_LENGTH)
-            .append(" == 0) {\n")
-            .append("return std::deque<std::pair<int, int>>();\n")
-            .append("}\n");
+            .append("self." + INPUT_STRING_LENGTH)
+            .append(" == 0):\n")
+            .append(
+                statement(
+                    3,
+                    "return []"
+                )
+            );
     }
 
     private static void addMainWhileLoopForFindMatches(
@@ -326,70 +347,46 @@ public class CppParserFileGenerator {
     ) {
         stringBuilder
             .append(
-                String.format(
-                    "while (%s < %s) {\n",
-                    CURR_INDEX,
-                    INPUT_STRING_LENGTH
-                )
-            )
-            .append(
-                String.format(
-                    "if (%s < %s) {\n",
-                    CURR_STATE,
-                    0
-                )
-            )
-            .append(
-                String.format(
-                    "return std::deque<std::pair<int, int>>();\n"
-                )
-            )
-            .append("}\n")
-            .append(
-                String.format(
-                    "%s = %s[%s];\n",
-                    CURR_CHAR,
-                    CHARS,
-                    CURR_INDEX
-                )
-            );
-
-        List<SwitchCase> switchCases = new ArrayList<>();
-
-        Iterator<DFANode> iterator = dfaNodes.iterator();
-        int i = 0;
-
-        while (iterator.hasNext()) {
-            final var node = iterator.next();
-
-            switchCases.add(
-                new SwitchCase(
-                    String.valueOf(i),
-                    addCurrentDFANodeTransitionsForFindMatches(
-                        node,
-                        defaultNode,
-                        flags
+                statement(
+                    2,
+                    String.format(
+                        "while (%s < %s) :",
+                        "self." + CURR_INDEX,
+                        "self." + INPUT_STRING_LENGTH
                     )
                 )
-            );
-
-            i++;
-        }
-
-        stringBuilder.append(
-            switchStatement(
-                CURR_STATE,
-                switchCases
+            )
+            .append(
+                statement(
+                    3,
+                    String.format(
+                        "%s = %s[%s]",
+                        "self." + CURR_CHAR,
+                        "self." + CHARS,
+                        "self." + CURR_INDEX
+                    )
+                )
+            )
+            .append(
+                statement(
+                    3,
+                    String.format(
+                        "%s.handle(%s)",
+                        "self." + CURR_STATE_HANDLER,
+                        "self." + CURR_CHAR
+                    )
+                )
+            )
+            .append(
+            statement(
+                3,
+                String.format(
+                    "%s = %s + 1",
+                    "self." + CURR_INDEX,
+                    "self." + CURR_INDEX
+                )
             )
         );
-
-        stringBuilder.append(
-            String.format(
-                "%s++;\n",
-                CURR_INDEX
-            )
-        );
-        stringBuilder.append("}\n");
     }
 
     public static String addResultFunctionImplementation() {
@@ -442,31 +439,30 @@ public class CppParserFileGenerator {
     ) {
 
         final StringBuilder classBody = new StringBuilder();
-        final List<String> includes = new ArrayList<>(List.of("string", "deque", "utility"));
 
         classBody
+            // .append(
+            //     functionBody(
+            //         1,
+            //         "matches",
+            //         List.of(
+            //             FUNCTION_INPUT_VARIABLE_NAME
+            //         ),
+            //         matchesFunctionImplementation(
+            //             startingNode,
+            //             dfaNodes,
+            //             startingNode,
+            //             flags,
+            //             className
+            //         )
+            //     )
+            // )
             .append(
                 functionBody(
-                    "matches",
-                    "bool",
-                    List.of(
-                        new FunctionParameter(
-                            "std::string",
-                            FUNCTION_INPUT_VARIABLE_NAME
-                        )
-                    ),
-                    matchesFunctionImplementation(startingNode, dfaNodes, startingNode, flags, className)
-                )
-            )
-            .append(
-                functionBody(
+                    1,
                     "findMatches",
-                    "std::deque<std::pair<int, int>>",
                     List.of(
-                        new FunctionParameter(
-                            "std::string",
-                            FUNCTION_INPUT_VARIABLE_NAME
-                        )
+                        FUNCTION_INPUT_VARIABLE_NAME
                     ),
                     findMatchesFunctionImplementation(
                         startingNode,
@@ -475,36 +471,38 @@ public class CppParserFileGenerator {
                         className
                     )
                 )
-            )
-            .append(
-                functionBody(
-                    "addResult",
-                    "inline void",
-                    List.of(
-                        new FunctionParameter(
-                            "int&",
-                            "lastSuccessfulMatchAt"
-                        ),
-                        new FunctionParameter(
-                            "int&",
-                            "currentMatchStartedAt"
-                        ),
-                        new FunctionParameter(
-                            "int&",
-                            "currentIndex"
-                        ),
-                        new FunctionParameter(
-                            "std::deque<std::pair<int, int>>&",
-                            "found"
-                        )
-                    ),
-                    addResultFunctionImplementation()
-                )
             );
+
+        final StringBuilder innerClasses = new StringBuilder();
+
+        for (var node : dfaNodes) {
+            innerClasses
+                .append("\t".repeat(1))
+                .append(
+                    withChildClass(
+                        String.format("State_%s", node.getId()),
+                        addCurrentDFANodeTransitionsForFindMatches(
+                            node,
+                            startingNode,
+                            flags
+                        )
+                    )
+                );
+        }
+
+        innerClasses.append(statement(1, "def __init__(self):"));
+        for (var node : dfaNodes) {
+            innerClasses.append(statement(
+                2,
+                String.format("self.state_%s = self.State_%s(self)", node.getId(), node.getId())
+            ));
+        }
+
         final var classImpl = withClass(
             className,
-            includes,
-            classBody.toString()
+            innerClasses.append("\n")
+                .append(classBody)
+                .toString()
         );
 
         try {
