@@ -33,6 +33,7 @@ import java.io.IOException;
 import java.io.Writer;
 import java.time.Instant;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -230,7 +231,7 @@ public class JavaParserFileGenerator {
         initStartingVariables(startingNode, codeBlockBuilder);
         codeBlockBuilder.addStatement(
             "$L = new $T<>()", FOUND,
-            ArrayDeque.class
+            ArrayList.class
         );
         handleEmptyInputWithParseResultOutput(codeBlockBuilder);
         addMainWhileLoopForFindMatches(codeBlockBuilder, dfaNodes, className);
@@ -404,7 +405,7 @@ public class JavaParserFileGenerator {
             .addField(
                 FieldSpec
                     .builder(
-                        ParameterizedTypeName.get(ArrayDeque.class, ParseResultMatch.class), FOUND,
+                        ParameterizedTypeName.get(ArrayList.class, ParseResultMatch.class), FOUND,
                         Modifier.PRIVATE, Modifier.STATIC
                     )
                     .build()

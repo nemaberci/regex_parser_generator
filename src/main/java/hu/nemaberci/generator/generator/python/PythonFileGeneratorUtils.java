@@ -96,31 +96,17 @@ public interface PythonFileGeneratorUtils {
     ) {
 
         StringBuilder stringBuilder = new StringBuilder();
-        for (int i = 0; i < cases.size(); i++) {
-            if (Objects.equals(cases.get(i).id, "default")) {
-                continue;
-            }
-            if (i == 0) {
-                stringBuilder.append(statement(depth, String.format("if (%s == %s):", varName, cases.get(i).id)));
-            } else {
-                stringBuilder.append(statement(depth, String.format("elif (%s == %s):", varName, cases.get(i).id)));
-            }
-            stringBuilder.append(cases.get(i).content);
+        if (cases.isEmpty()) {
+            return statement(depth, "pass");
         }
-        if (cases.size() == 1) {
-            stringBuilder.append(statement(depth, "if True:"));
-            stringBuilder.append(cases.get(0).content);
-        } else if (cases.size() > 1) {
-            if (cases.stream().anyMatch(aCase -> Objects.equals(aCase.id, "default"))) {
-                stringBuilder.append(statement(depth, "else:"));
-                for (SwitchCase aCase : cases) {
-                    if (Objects.equals(aCase.id, "default")) {
-                        stringBuilder.append(aCase.content);
-                    }
-                }
+        stringBuilder.append(statement(depth, "match " + varName + ":"));
+        for (SwitchCase aCase : cases) {
+            if (Objects.equals(aCase.id, "default")) {
+                stringBuilder.append(statement(depth + 1, "case _:"));
+            } else {
+                stringBuilder.append(statement(depth + 1, "case " + aCase.id + ":"));
             }
-        } else {
-            stringBuilder.append(statement(depth, "pass"));
+            stringBuilder.append(aCase.content);
         }
         return stringBuilder.toString();
     }

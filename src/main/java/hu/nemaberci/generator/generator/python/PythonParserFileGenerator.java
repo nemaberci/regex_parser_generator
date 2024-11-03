@@ -258,7 +258,7 @@ public class PythonParserFileGenerator {
                     new SwitchCase(
                         String.valueOf(i),
                         statement(
-                            3,
+                            4,
                             String.format(
                                 "%s = %s - 1",
                                 "self." + LAST_SUCCESSFUL_MATCH_AT,
@@ -296,7 +296,7 @@ public class PythonParserFileGenerator {
                     String.format(
                         "if (%s > %s):",
                         "self." + LAST_SUCCESSFUL_MATCH_AT,
-                        0
+                        "self." + MATCH_STARTED_AT
                     )
                 )
             );

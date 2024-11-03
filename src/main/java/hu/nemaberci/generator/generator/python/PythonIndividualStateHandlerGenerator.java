@@ -157,7 +157,7 @@ public class PythonIndividualStateHandlerGenerator {
         switchCases.add(
             new SwitchCase(
                 "default",
-                returnToDefaultNode(curr, defaultNode, flags)
+                returnToDefaultNode(5, curr, defaultNode, flags)
             )
         );
     }
@@ -178,7 +178,7 @@ public class PythonIndividualStateHandlerGenerator {
         switchCases.add(
             new SwitchCase(
                 "default",
-                returnToDefaultNode(curr, defaultNode, flags)
+                returnToDefaultNode(5, curr, defaultNode, flags)
             )
         );
         stringBuilder.append(
@@ -203,14 +203,14 @@ public class PythonIndividualStateHandlerGenerator {
                 new SwitchCase(
                     '\'' + edge.getKey().toString() + '\'',
                     statement(
-                        4,
+                        5,
                         String.format(
                             "self.parent.%s = %d",
                             CURR_STATE,
                             edge.getValue().getId()
                         )
                     ) + statement(
-                        4,
+                        5,
                         String.format(
                             "self.parent.%s = self.parent.state_%d",
                             CURR_STATE_HANDLER,
@@ -226,7 +226,7 @@ public class PythonIndividualStateHandlerGenerator {
                 new SwitchCase(
                     '\'' + edge.getKey().toString() + '\'',
                     restartSearchBody(
-                        4,
+                        5,
                         defaultNode,
                         flags
                     )
@@ -237,6 +237,7 @@ public class PythonIndividualStateHandlerGenerator {
     }
 
     private static String returnToDefaultNode(
+        int depth,
         DFANode curr,
         DFANode defaultNode,
         Collection<RegexFlag> flags
@@ -247,7 +248,7 @@ public class PythonIndividualStateHandlerGenerator {
             // If the string has to match from the start and there is match in the DFA,
             // we move to an impossible state.
             return statement(
-                4,
+                depth,
                 String.format(
                     "self.parent.%s = %s;",
                     CURR_STATE,
@@ -260,14 +261,14 @@ public class PythonIndividualStateHandlerGenerator {
             if (curr.getDefaultTransition() != null) {
 
                 return statement(
-                    4,
+                    depth,
                     String.format(
                         "self.parent.%s = %d",
                         CURR_STATE,
                         curr.getDefaultTransition().getId()
                     )
                 ) + statement(
-                    4,
+                    depth,
                     String.format(
                         "self.parent.%s = self.parent.state_%d",
                         CURR_STATE_HANDLER,
@@ -278,7 +279,7 @@ public class PythonIndividualStateHandlerGenerator {
             } else {
 
                 return restartSearchBody(
-                    4,
+                    depth,
                     defaultNode,
                     flags
                 );
